@@ -5,7 +5,7 @@ import { parseFile } from "./babel/parseFile.js";
 import { ParsedFile } from "./models/ParsedFile.js";
 import { ParseFailure } from "./models/ParseFailure.js";
 import { ParsedRepository } from "./models/ParsedRepository.js";
-import { SymbolExtractror } from "./extractors/SymbolExtractor.js";
+import { SymbolExtractor } from "./extractors/SymbolExtractor.js";
 
 /*
 * TODO: later call this parse function inside the worker
@@ -36,7 +36,7 @@ export class Parser {
             }
         }
 
-        const symbolExtractor = new SymbolExtractror();
+        const symbolExtractor = new SymbolExtractor();
 
         for (const parsedFile of parsedFiles) {
             symbolExtractor.extract(parsedFile);
@@ -48,4 +48,4 @@ export class Parser {
 
 const parser = new Parser();
 const result = await parser.parse(path.join(process.cwd(), "uploads", "demo"));
-console.log(result);
+console.log(result.files.map(file => file.symbols.length));
