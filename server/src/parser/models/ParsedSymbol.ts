@@ -15,7 +15,9 @@ export interface SymbolLocation {
 }
 
 export interface ParsedSymbol {
+    id: string;
     name: string;
     symbolKind: SymbolKind;
     location: SymbolLocation;
+    parentSymbolId?: string;
 }
