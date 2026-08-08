@@ -1,9 +1,17 @@
 import { ParsedFile } from "../models/ParsedFile.js";
 import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, FunctionDeclaration, FunctionExpression } from "@babel/types";
-import { ParsedSymbol, SymbolLocation } from "../models/ParsedSymbol.js";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, FunctionDeclaration, FunctionExpression, TSInterfaceDeclaration } from "@babel/types";
+import { ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
-export class SymbolExtractror {
+type SupportedSymbolNode =
+    | FunctionDeclaration
+    | ArrowFunctionExpression
+    | FunctionExpression
+    | ClassDeclaration
+    | ClassExpression
+    | TSInterfaceDeclaration;
+
+export class SymbolExtractor {
     /*
     * Helper function to push symbol into the parsed file.
     */
@@ -14,23 +22,34 @@ export class SymbolExtractror {
     /* ===========================
     * Helper Functions for extracting symbols
     =========================== */
-    
-    // get function name from the path
-    private getFunctionName(path: NodePath<FunctionDeclaration | ArrowFunctionExpression | FunctionExpression>): string | null {
+
+    // get symbol name from the path
+    private getSymbolName(path: NodePath<SupportedSymbolNode>): string | null {
         if (path.isFunctionDeclaration()) {
             return path.node.id?.name || "";
-        } else if (path.parentPath?.isVariableDeclarator()) {
+        }
+
+        if (path.parentPath?.isVariableDeclarator()) {
             const id = path.parentPath.node.id;
 
             if (id.type === "Identifier") {
                 return id.name;
             }
         }
+
+        if (path.isClassDeclaration() || path.isClassExpression()) {
+            return path.node.id?.name || "";
+        }
+
+        if (path.isTSInterfaceDeclaration()) {
+            return path.node.id.name;
+        }
+
         return null;
     }
 
     // create location object from path
-    private createLocation(path: NodePath): SymbolLocation {
+    private buildSymbolLocation(path: NodePath): SymbolLocation {
         const loc = path.node.loc;
         if (!loc) return { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 };
 
@@ -42,24 +61,25 @@ export class SymbolExtractror {
         }
     }
 
-    // build function symbol
-    private buildFunctionSymbol(name: string, path: NodePath): ParsedSymbol {
+    // build symbol
+    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath): ParsedSymbol {
         return {
             name,
-            symbolKind: "function",
-            location: this.createLocation(path),
+            symbolKind,
+            location: this.buildSymbolLocation(path),
         }
     }
 
-    // extract function symbol from the path
-    private extractFunctionSymbol(path: NodePath<FunctionDeclaration | ArrowFunctionExpression | FunctionExpression>, parsedFile: ParsedFile): void {
-        const name = this.getFunctionName(path);
-        if(!name) return;
-        
+    // extract symbol from the path
+    private extractSymbol(path: NodePath<SupportedSymbolNode>, parsedFile: ParsedFile, kind: SymbolKind): void {
+        const name = this.getSymbolName(path);
+        if (!name) return;
+
         this.addSymbol(
             parsedFile,
-            this.buildFunctionSymbol(
+            this.buildSymbol(
                 name,
+                kind,
                 path
             )
         )
@@ -70,17 +90,32 @@ export class SymbolExtractror {
 
             // FunctionDeclaration Extractor (using arrow-function to preserve `this` for SymbolConstructor)
             FunctionDeclaration: (path: NodePath<FunctionDeclaration>) => {
-                this.extractFunctionSymbol(path, parsedFile);
+                this.extractSymbol(path, parsedFile, "function");
             },
 
             // ArrowFunctionExpression Extractor
             ArrowFunctionExpression: (path: NodePath<ArrowFunctionExpression>) => {
-                this.extractFunctionSymbol(path, parsedFile);
+                this.extractSymbol(path, parsedFile, "function");
             },
 
             // FunctionExpression Extractor
             FunctionExpression: (path: NodePath<FunctionExpression>) => {
-                this.extractFunctionSymbol(path, parsedFile);
+                this.extractSymbol(path, parsedFile, "function");
+            },
+
+            // ClassDeclaration Extractor
+            ClassDeclaration: (path: NodePath<ClassDeclaration>) => {
+                this.extractSymbol(path, parsedFile, "class");
+            },
+
+            // ClassExpression Extractor
+            ClassExpression: (path: NodePath<ClassExpression>) => {
+                this.extractSymbol(path, parsedFile, "class");
+            },
+
+            // Interface Extractor
+            TSInterfaceDeclaration: (path: NodePath<TSInterfaceDeclaration>) => {
+                this.extractSymbol(path, parsedFile, "interface");
             },
         })
     }
