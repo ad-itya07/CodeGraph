@@ -1,6 +1,6 @@
 import { ParsedFile } from "../models/ParsedFile.js";
 import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, FunctionDeclaration, FunctionExpression, TSInterfaceDeclaration } from "@babel/types";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, FunctionDeclaration, FunctionExpression, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
 import { ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
 type SupportedSymbolNode =
@@ -9,7 +9,10 @@ type SupportedSymbolNode =
     | FunctionExpression
     | ClassDeclaration
     | ClassExpression
-    | TSInterfaceDeclaration;
+    | TSInterfaceDeclaration
+    | VariableDeclarator
+    | TSEnumDeclaration
+    | TSTypeAliasDeclaration;
 
 export class SymbolExtractor {
     /*
@@ -42,6 +45,14 @@ export class SymbolExtractor {
         }
 
         if (path.isTSInterfaceDeclaration()) {
+            return path.node.id.name;
+        }
+
+        if (path.isTSEnumDeclaration()) {
+            return path.node.id.name;
+        }
+
+        if (path.isTSTypeAliasDeclaration()) {
             return path.node.id.name;
         }
 
@@ -85,6 +96,50 @@ export class SymbolExtractor {
         )
     }
 
+    /* ===========================
+    * HELPER FUNCTION FOR GETTING VARIABLE NAMES
+
+    * because variables doesn't always has `id.type` as Identifier
+    * we can also have 
+    *   1. ObjectPattern: `const {dob, name} = user`
+    *   2. ArrayPattern: `const [dob, name] = user`
+    *   3. Aliases: const `{ name: userName } = user`
+    *       - Incase of aliases, the symbol name is actually "userName"
+    *   4. Nested Patterns: `const { address: {city} } = user`
+    *       - Nested Patterns are UNSUPPORTED for now
+    * NOTE: you can see that the above patterns have mulitple variable, 
+    *       so we need a seperarte helper function
+    =========================== */
+    private getVariableName(path: NodePath<VariableDeclarator>): string[] {
+        const id = path.node.id;
+
+        if (id.type === "Identifier") {
+            return [id.name];
+        }
+
+        if (id.type === "ObjectPattern") {
+            return id.properties
+                .filter(property => property.type === "ObjectProperty")
+                .map(property => {
+                    if (property.value.type === "Identifier") {
+                        return property.value.name;
+                    }
+
+                    return null;
+                })
+                .filter((name): name is string => name !== null);
+
+        }
+
+        if (id.type === "ArrayPattern") {
+            return id.elements
+                .filter(element => element?.type === "Identifier")
+                .map(element => element?.name)
+        }
+
+        return [];
+    }
+
     extract(parsedFile: ParsedFile): void {
         traverse.default(parsedFile.ast, {
 
@@ -117,6 +172,32 @@ export class SymbolExtractor {
             TSInterfaceDeclaration: (path: NodePath<TSInterfaceDeclaration>) => {
                 this.extractSymbol(path, parsedFile, "interface");
             },
+
+            // Variable Extractor
+            VariableDeclarator: (path: NodePath<VariableDeclarator>) => {
+                const names = this.getVariableName(path);
+
+                for (const name of names) {
+                    this.addSymbol(
+                        parsedFile,
+                        this.buildSymbol(
+                            name,
+                            "variable",
+                            path
+                        )
+                    );
+                }
+            },
+
+            // TSEnumDeclaration Extractor
+            TSEnumDeclaration: (path: NodePath<TSEnumDeclaration>) => {
+                this.extractSymbol(path, parsedFile, "enum");
+            },
+
+            // TSTypeAliasDeclaration Extractor
+            TSTypeAliasDeclaration: (path: NodePath<TSTypeAliasDeclaration>) => {
+                this.extractSymbol(path, parsedFile, "typeAlias");
+            }
         })
     }
 }
