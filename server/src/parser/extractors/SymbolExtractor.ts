@@ -1,6 +1,6 @@
 import { ParsedFile } from "../models/ParsedFile.js";
 import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, FunctionDeclaration, FunctionExpression, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
 import { ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
 type SupportedSymbolNode =
@@ -12,7 +12,9 @@ type SupportedSymbolNode =
     | TSInterfaceDeclaration
     | VariableDeclarator
     | TSEnumDeclaration
-    | TSTypeAliasDeclaration;
+    | TSTypeAliasDeclaration
+    | ClassMethod
+    | ObjectMethod;
 
 export class SymbolExtractor {
     /*
@@ -54,6 +56,16 @@ export class SymbolExtractor {
 
         if (path.isTSTypeAliasDeclaration()) {
             return path.node.id.name;
+        }
+
+        if (path.isClassMethod()) {
+            const key = path.node.key;
+            if (key.type === "Identifier") return key.name;
+        }
+
+        if (path.isObjectMethod()) {
+            const key = path.node.key;
+            if (key.type === "Identifier") return key.name;
         }
 
         return null;
@@ -197,7 +209,17 @@ export class SymbolExtractor {
             // TSTypeAliasDeclaration Extractor
             TSTypeAliasDeclaration: (path: NodePath<TSTypeAliasDeclaration>) => {
                 this.extractSymbol(path, parsedFile, "typeAlias");
-            }
+            },
+
+            // ClassMethod Extractor
+            ClassMethod: (path: NodePath<ClassMethod>) => {
+                this.extractSymbol(path, parsedFile, "method");
+            },
+
+            // ObjectMethod Extractor
+            ObjectMethod: (path: NodePath<ObjectMethod>) => {
+                this.extractSymbol(path, parsedFile, "method");
+            },
         })
     }
 }
