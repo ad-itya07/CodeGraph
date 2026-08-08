@@ -5,6 +5,7 @@ import { parseFile } from "./babel/parseFile.js";
 import { ParsedFile } from "./models/ParsedFile.js";
 import { ParseFailure } from "./models/ParseFailure.js";
 import { ParsedRepository } from "./models/ParsedRepository.js";
+import { SymbolExtractror } from "./extractors/SymbolExtractor.js";
 
 /*
 * TODO: later call this parse function inside the worker
@@ -25,16 +26,20 @@ export class Parser {
         const failedFiles: ParseFailure[] = [];
         for (const file of supportedFiles) {
             try {
-                console.log(`Parsing ${file}`);
                 parsedFiles.push(parseFile(file));
             } catch (err: unknown) {
-                console.error(`Failed to parse file ${file}`);
                 if (err instanceof Error) {
                     failedFiles.push({ filePath: file, message: err.message, cause: err });
                 } else {
                     failedFiles.push({ filePath: file, message: "Unknown parsing error", cause: err });
                 }
             }
+        }
+
+        const symbolExtractor = new SymbolExtractror();
+
+        for (const parsedFile of parsedFiles) {
+            symbolExtractor.extract(parsedFile);
         }
 
         return { repositoryPath, files: parsedFiles, failures: failedFiles, relationships: [] };
