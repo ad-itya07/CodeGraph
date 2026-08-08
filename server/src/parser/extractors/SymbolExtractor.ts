@@ -84,12 +84,19 @@ export class SymbolExtractor {
         }
     }
 
+    // build symbol Id
+    private buildSymbolId(parsedFile: ParsedFile, name: string, location: SymbolLocation): string {
+        return `${parsedFile.filePath}:${location.startLine}:${location.startColumn}:${name}`
+    }
+
     // build symbol
-    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath): ParsedSymbol {
+    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath, parsedFile: ParsedFile): ParsedSymbol {
+        const location = this.buildSymbolLocation(path);
         return {
+            id: this.buildSymbolId(parsedFile, name, location),
             name,
             symbolKind,
-            location: this.buildSymbolLocation(path),
+            location
         }
     }
 
@@ -103,7 +110,8 @@ export class SymbolExtractor {
             this.buildSymbol(
                 name,
                 kind,
-                path
+                path,
+                parsedFile
             )
         )
     }
@@ -187,6 +195,12 @@ export class SymbolExtractor {
 
             // Variable Extractor
             VariableDeclarator: (path: NodePath<VariableDeclarator>) => {
+                if (
+                    path.node.init?.type === "ArrowFunctionExpression" ||
+                    path.node.init?.type === "FunctionExpression" ||
+                    path.node.init?.type === "ClassExpression"
+                ) return;
+
                 const names = this.getVariableName(path);
 
                 for (const name of names) {
@@ -195,7 +209,8 @@ export class SymbolExtractor {
                         this.buildSymbol(
                             name,
                             "variable",
-                            path
+                            path,
+                            parsedFile
                         )
                     );
                 }
