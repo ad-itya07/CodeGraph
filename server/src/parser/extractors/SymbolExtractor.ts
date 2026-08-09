@@ -98,6 +98,8 @@ export class SymbolExtractor {
 
     // get method kind from path
     private getMethodKind(path: NodePath<ClassMethod | ClassPrivateMethod | ObjectMethod>): MethodKind {
+        if (path.isClassPrivateMethod()) return "private";
+
         return path.node.kind === "get" || path.node.kind === "set"
             ? path.node.kind
             : "method";

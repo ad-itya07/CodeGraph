@@ -17,7 +17,8 @@ export interface SymbolLocation {
 export type MethodKind =
     | "get"
     | "set"
-    | "method";
+    | "method"
+    | "private";
 
 export interface ParsedSymbol {
     id: string;
