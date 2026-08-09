@@ -14,10 +14,16 @@ export interface SymbolLocation {
     endColumn: number;
 }
 
+export type MethodKind =
+    | "get"
+    | "set"
+    | "method";
+
 export interface ParsedSymbol {
     id: string;
     name: string;
     symbolKind: SymbolKind;
+    methodKind?: MethodKind;
     location: SymbolLocation;
     parentSymbolId?: string;
 }

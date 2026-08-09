@@ -1,7 +1,7 @@
 import { ParsedFile } from "../models/ParsedFile.js";
 import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
-import { ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, ClassPrivateMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
+import { MethodKind, ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
 type SupportedSymbolNode =
     | FunctionDeclaration
@@ -14,7 +14,8 @@ type SupportedSymbolNode =
     | TSEnumDeclaration
     | TSTypeAliasDeclaration
     | ClassMethod
-    | ObjectMethod;
+    | ObjectMethod
+    | ClassPrivateMethod;
 
 export class SymbolExtractor {
     /*
@@ -61,6 +62,13 @@ export class SymbolExtractor {
         if (path.isClassMethod()) {
             const key = path.node.key;
             if (key.type === "Identifier") return key.name;
+
+            if (key.type === "StringLiteral") return key.value;
+        }
+
+        if (path.isClassPrivateMethod()) {
+            const key = path.node.key;
+            if (key.type === "PrivateName") return key.id.name;
         }
 
         if (path.isObjectMethod()) {
@@ -69,6 +77,13 @@ export class SymbolExtractor {
         }
 
         return null;
+    }
+
+    // get method kind from path
+    private getMethodKind(path: NodePath<ClassMethod | ClassPrivateMethod | ObjectMethod>): MethodKind {
+        return path.node.kind === "get" || path.node.kind === "set"
+            ? path.node.kind
+            : "method";
     }
 
     // create location object from path
@@ -90,18 +105,20 @@ export class SymbolExtractor {
     }
 
     // build symbol
-    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath, parsedFile: ParsedFile): ParsedSymbol {
+    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath, parsedFile: ParsedFile, parentSymbolId?: string, methodKind?: MethodKind): ParsedSymbol {
         const location = this.buildSymbolLocation(path);
         return {
             id: this.buildSymbolId(parsedFile, name, location),
             name,
             symbolKind,
-            location
+            location,
+            parentSymbolId,
+            methodKind
         }
     }
 
     // extract symbol from the path
-    private extractSymbol(path: NodePath<SupportedSymbolNode>, parsedFile: ParsedFile, kind: SymbolKind): void {
+    private extractSymbol(path: NodePath<SupportedSymbolNode>, parsedFile: ParsedFile, kind: SymbolKind, methodKind?: string): void {
         const name = this.getSymbolName(path);
         if (!name) return;
 
@@ -158,6 +175,49 @@ export class SymbolExtractor {
         }
 
         return [];
+    }
+
+    /* ===========================
+    * HELPER FUNCTION FOR FINDING PARENT CLASS FOR METHOD
+    =========================== */
+    private getParentClassSymbol(path: NodePath<ClassMethod | ClassPrivateMethod>, parsedFile: ParsedFile): ParsedSymbol | undefined {
+        const classPath = path.parentPath?.parentPath;
+
+        let classSymbol: ParsedSymbol | undefined;
+
+        // check if the parent is a class declaration
+        if (classPath?.isClassDeclaration()) {
+            const className = classPath.node.id?.name;
+
+            // find the parent-class symbol
+            classSymbol = parsedFile.symbols.find(
+                symbol =>
+                    symbol.name === className &&
+                    symbol.symbolKind === "class"
+            );
+        }
+
+        // check if parent is class expression
+        else if (classPath?.isClassExpression()) {
+            const variableDeclaratorPath = classPath.parentPath;
+
+            if (variableDeclaratorPath?.isVariableDeclarator()) {
+                const id = variableDeclaratorPath.node.id;
+
+                if (id.type === "Identifier") {
+                    const className = id.name;
+
+                    // find the parent-class symbol
+                    classSymbol = parsedFile.symbols.find(
+                        symbol =>
+                            symbol.name === className &&
+                            symbol.symbolKind === "class"
+                    );
+                }
+            }
+        }
+
+        return classSymbol;
     }
 
     extract(parsedFile: ParsedFile): void {
@@ -228,12 +288,60 @@ export class SymbolExtractor {
 
             // ClassMethod Extractor
             ClassMethod: (path: NodePath<ClassMethod>) => {
-                this.extractSymbol(path, parsedFile, "method");
+                const classSymbol: ParsedSymbol | undefined = this.getParentClassSymbol(path, parsedFile);
+                const methodKind: MethodKind = this.getMethodKind(path);
+
+                if (classSymbol) {
+                    const name = this.getSymbolName(path);
+                    if (!name) return;
+
+                    this.addSymbol(
+                        parsedFile,
+                        this.buildSymbol(
+                            name,
+                            "method",
+                            path,
+                            parsedFile,
+                            classSymbol.id,
+                            methodKind
+                        )
+                    );
+                    return;
+                }
+
+                this.extractSymbol(path, parsedFile, "method", methodKind);
             },
 
-            // ObjectMethod Extractor
+            // Class private method class A { #user() {} };
+            ClassPrivateMethod: (path: NodePath<ClassPrivateMethod>) => {
+                const classSymbol: ParsedSymbol | undefined = this.getParentClassSymbol(path, parsedFile);
+                const methodKind: MethodKind = this.getMethodKind(path);
+
+                if (classSymbol) {
+                    const name = this.getSymbolName(path);
+                    if (!name) return;
+
+                    this.addSymbol(
+                        parsedFile,
+                        this.buildSymbol(
+                            name,
+                            "method",
+                            path,
+                            parsedFile,
+                            classSymbol.id,
+                            methodKind
+                        )
+                    );
+                    return;
+                }
+
+                this.extractSymbol(path, parsedFile, "method", methodKind);
+            },
+
+            // ObjectMethod Extractor `const user = { userName() {}, getUser() {} }`
             ObjectMethod: (path: NodePath<ObjectMethod>) => {
-                this.extractSymbol(path, parsedFile, "method");
+                const methodKind = this.getMethodKind(path);
+                this.extractSymbol(path, parsedFile, "method", methodKind);
             },
         })
     }
