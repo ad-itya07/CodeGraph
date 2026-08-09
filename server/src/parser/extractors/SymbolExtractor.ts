@@ -17,6 +17,23 @@ type SupportedSymbolNode =
     | ObjectMethod
     | ClassPrivateMethod;
 
+interface BuildSymbolParams {
+    name: string;
+    symbolKind: SymbolKind;
+    path: NodePath;
+    parsedFile: ParsedFile;
+    parentSymbolId?: string;
+    methodKind?: MethodKind;
+}
+
+interface ExtractSymbolParams {
+    path: NodePath<SupportedSymbolNode>;
+    parsedFile: ParsedFile;
+    symbolKind: SymbolKind;
+    parentSymbolId?: string;
+    methodKind?: MethodKind;
+}
+
 export class SymbolExtractor {
     /*
     * Helper function to push symbol into the parsed file.
@@ -105,7 +122,7 @@ export class SymbolExtractor {
     }
 
     // build symbol
-    private buildSymbol(name: string, symbolKind: SymbolKind, path: NodePath, parsedFile: ParsedFile, parentSymbolId?: string, methodKind?: MethodKind): ParsedSymbol {
+    private buildSymbol({ name, symbolKind, path, parsedFile, parentSymbolId, methodKind }: BuildSymbolParams): ParsedSymbol {
         const location = this.buildSymbolLocation(path);
         return {
             id: this.buildSymbolId(parsedFile, name, location),
@@ -118,19 +135,20 @@ export class SymbolExtractor {
     }
 
     // extract symbol from the path
-    private extractSymbol(path: NodePath<SupportedSymbolNode>, parsedFile: ParsedFile, kind: SymbolKind, methodKind?: string): void {
+    private extractSymbol({ path, parsedFile, symbolKind, methodKind, parentSymbolId }: ExtractSymbolParams): void {
         const name = this.getSymbolName(path);
         if (!name) return;
 
         this.addSymbol(
             parsedFile,
-            this.buildSymbol(
+            this.buildSymbol({
                 name,
-                kind,
+                symbolKind,
                 path,
                 parsedFile,
-                methodKind
-            )
+                parentSymbolId,
+                methodKind,
+            })
         )
     }
 
@@ -179,23 +197,30 @@ export class SymbolExtractor {
     }
 
     /* ===========================
+    * HELPER FUNCTION FOR FINDING SYMBOL
+    =========================== */
+    private findSymbol(parsedFile: ParsedFile, name: string | undefined, symbolKind: SymbolKind): ParsedSymbol | undefined {
+        if (!name) return undefined;
+
+        return parsedFile.symbols.find(
+            symbol =>
+                symbol.name === name &&
+                symbol.symbolKind === symbolKind
+        );
+    }
+
+    /* ===========================
     * HELPER FUNCTION FOR FINDING PARENT CLASS FOR METHOD
     =========================== */
     private getParentClassSymbol(path: NodePath<ClassMethod | ClassPrivateMethod>, parsedFile: ParsedFile): ParsedSymbol | undefined {
         const classPath = path.parentPath?.parentPath;
-
-        let classSymbol: ParsedSymbol | undefined;
 
         // check if the parent is a class declaration
         if (classPath?.isClassDeclaration()) {
             const className = classPath.node.id?.name;
 
             // find the parent-class symbol
-            classSymbol = parsedFile.symbols.find(
-                symbol =>
-                    symbol.name === className &&
-                    symbol.symbolKind === "class"
-            );
+            return this.findSymbol(parsedFile, className, "class");
         }
 
         // check if parent is class expression
@@ -209,16 +234,30 @@ export class SymbolExtractor {
                     const className = id.name;
 
                     // find the parent-class symbol
-                    classSymbol = parsedFile.symbols.find(
-                        symbol =>
-                            symbol.name === className &&
-                            symbol.symbolKind === "class"
-                    );
+                    return this.findSymbol(parsedFile, className, "class");
                 }
             }
         }
 
-        return classSymbol;
+        return undefined;
+    }
+
+    /* ===========================
+    * HELPER FUNCTION FOR FINDING PARENT OBJECT FOR METHOD
+    =========================== */
+    private getParentObjectSymbol(path: NodePath<ObjectMethod>, parsedFile: ParsedFile): ParsedSymbol | undefined {
+        const objectPath = path.parentPath?.parentPath;
+
+        // check if the parent is an object
+        if (!objectPath?.isVariableDeclarator()) return undefined;
+
+        const id = objectPath.node.id;
+        if (id.type !== "Identifier") return undefined;
+
+        const objectName = id.name;
+
+        // find the parent-object symbol
+        return this.findSymbol(parsedFile, objectName, "variable");
     }
 
     extract(parsedFile: ParsedFile): void {
@@ -226,32 +265,32 @@ export class SymbolExtractor {
 
             // FunctionDeclaration Extractor (using arrow-function to preserve `this` for SymbolConstructor)
             FunctionDeclaration: (path: NodePath<FunctionDeclaration>) => {
-                this.extractSymbol(path, parsedFile, "function");
+                this.extractSymbol({ path, parsedFile, symbolKind: "function" });
             },
 
             // ArrowFunctionExpression Extractor
             ArrowFunctionExpression: (path: NodePath<ArrowFunctionExpression>) => {
-                this.extractSymbol(path, parsedFile, "function");
+                this.extractSymbol({ path, parsedFile, symbolKind: "function" });
             },
 
             // FunctionExpression Extractor
             FunctionExpression: (path: NodePath<FunctionExpression>) => {
-                this.extractSymbol(path, parsedFile, "function");
+                this.extractSymbol({ path, parsedFile, symbolKind: "function" });
             },
 
             // ClassDeclaration Extractor
             ClassDeclaration: (path: NodePath<ClassDeclaration>) => {
-                this.extractSymbol(path, parsedFile, "class");
+                this.extractSymbol({ path, parsedFile, symbolKind: "class" });
             },
 
             // ClassExpression Extractor
             ClassExpression: (path: NodePath<ClassExpression>) => {
-                this.extractSymbol(path, parsedFile, "class");
+                this.extractSymbol({ path, parsedFile, symbolKind: "class" });
             },
 
             // Interface Extractor
             TSInterfaceDeclaration: (path: NodePath<TSInterfaceDeclaration>) => {
-                this.extractSymbol(path, parsedFile, "interface");
+                this.extractSymbol({ path, parsedFile, symbolKind: "interface" });
             },
 
             // Variable Extractor
@@ -267,24 +306,24 @@ export class SymbolExtractor {
                 for (const name of names) {
                     this.addSymbol(
                         parsedFile,
-                        this.buildSymbol(
+                        this.buildSymbol({
                             name,
-                            "variable",
+                            symbolKind: "variable",
                             path,
                             parsedFile
-                        )
+                        })
                     );
                 }
             },
 
             // TSEnumDeclaration Extractor
             TSEnumDeclaration: (path: NodePath<TSEnumDeclaration>) => {
-                this.extractSymbol(path, parsedFile, "enum");
+                this.extractSymbol({ path, parsedFile, symbolKind: "enum" });
             },
 
             // TSTypeAliasDeclaration Extractor
             TSTypeAliasDeclaration: (path: NodePath<TSTypeAliasDeclaration>) => {
-                this.extractSymbol(path, parsedFile, "typeAlias");
+                this.extractSymbol({ path, parsedFile, symbolKind: "typeAlias" });
             },
 
             // ClassMethod Extractor
@@ -298,19 +337,19 @@ export class SymbolExtractor {
 
                     this.addSymbol(
                         parsedFile,
-                        this.buildSymbol(
+                        this.buildSymbol({
                             name,
-                            "method",
+                            symbolKind: "method",
                             path,
                             parsedFile,
-                            classSymbol.id,
+                            parentSymbolId: classSymbol.id,
                             methodKind
-                        )
+                        })
                     );
                     return;
                 }
 
-                this.extractSymbol(path, parsedFile, "method", methodKind);
+                this.extractSymbol({ path, parsedFile, symbolKind: "method", methodKind });
             },
 
             // Class private method class A { #user() {} };
@@ -324,25 +363,45 @@ export class SymbolExtractor {
 
                     this.addSymbol(
                         parsedFile,
-                        this.buildSymbol(
+                        this.buildSymbol({
                             name,
-                            "method",
+                            symbolKind: "method",
                             path,
                             parsedFile,
-                            classSymbol.id,
+                            parentSymbolId: classSymbol.id,
                             methodKind
-                        )
+                        })
                     );
                     return;
                 }
 
-                this.extractSymbol(path, parsedFile, "method", methodKind);
+                this.extractSymbol({ path, parsedFile, symbolKind: "method", methodKind });
             },
 
             // ObjectMethod Extractor `const user = { userName() {}, getUser() {} }`
             ObjectMethod: (path: NodePath<ObjectMethod>) => {
+                const parentSymbol = this.getParentObjectSymbol(path, parsedFile);
                 const methodKind = this.getMethodKind(path);
-                this.extractSymbol(path, parsedFile, "method", methodKind);
+
+                if (parentSymbol) {
+                    const name = this.getSymbolName(path);
+                    if (!name) return;
+
+                    this.addSymbol(
+                        parsedFile,
+                        this.buildSymbol({
+                            name,
+                            symbolKind: "method",
+                            path,
+                            parsedFile,
+                            parentSymbolId: parentSymbol.id,
+                            methodKind
+                        })
+                    );
+                    return;
+                }
+
+                this.extractSymbol({ path, parsedFile, symbolKind: "method", methodKind });
             },
         })
     }
