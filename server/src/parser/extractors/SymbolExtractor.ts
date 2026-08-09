@@ -128,7 +128,8 @@ export class SymbolExtractor {
                 name,
                 kind,
                 path,
-                parsedFile
+                parsedFile,
+                methodKind
             )
         )
     }
