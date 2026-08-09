@@ -262,12 +262,73 @@ export class SymbolExtractor {
         return this.findSymbol(parsedFile, objectName, "variable");
     }
 
+    /* ===========================
+    * HELPER FUNCTION FOR FINDING PARENT FUNCTION FOR NESTED FUNCTION
+    =========================== */
+    private getParentFunctionSymbol(path: NodePath<FunctionDeclaration>, parsedFile: ParsedFile): ParsedSymbol | undefined {
+        let currentPath: NodePath | null = path.parentPath;
+
+        while (currentPath) {
+            if (currentPath.isFunctionDeclaration()) {
+                const name = currentPath.node.id?.name;
+                return this.findSymbol(parsedFile, name, "function");
+            }
+
+            currentPath = currentPath.parentPath;
+        }
+
+        return undefined;
+    }
+
+    // Parent function symbol of a variable
+    private getParentFunctionSymbolForVariable(path: NodePath<VariableDeclarator>, parsedFile: ParsedFile): ParsedSymbol | undefined {
+        let currentPath: NodePath | null = path.parentPath;
+
+        while (currentPath) {
+            if (currentPath.isFunctionDeclaration()) {
+                const functionName = currentPath.node.id?.name;
+
+                return this.findSymbol(
+                    parsedFile,
+                    functionName,
+                    "function"
+                );
+            }
+
+            currentPath = currentPath.parentPath;
+        }
+
+        return undefined;
+    }
+
+    // parent function symbol of a class
+    private getParentFunctionSymbolForClass(path: NodePath<ClassDeclaration>, parsedFile: ParsedFile): ParsedSymbol | undefined {
+        let currentPath: NodePath | null = path.parentPath;
+
+        while (currentPath) {
+            if (currentPath.isFunctionDeclaration()) {
+                const functionName = currentPath.node.id?.name;
+
+                return this.findSymbol(
+                    parsedFile,
+                    functionName,
+                    "function"
+                );
+            }
+
+            currentPath = currentPath.parentPath;
+        }
+
+        return undefined;
+    }
+
     extract(parsedFile: ParsedFile): void {
         traverse.default(parsedFile.ast, {
 
             // FunctionDeclaration Extractor (using arrow-function to preserve `this` for SymbolConstructor)
             FunctionDeclaration: (path: NodePath<FunctionDeclaration>) => {
-                this.extractSymbol({ path, parsedFile, symbolKind: "function" });
+                const parentFunction = this.getParentFunctionSymbol(path, parsedFile)
+                this.extractSymbol({ path, parsedFile, symbolKind: "function", parentSymbolId: parentFunction?.id });
             },
 
             // ArrowFunctionExpression Extractor
@@ -282,7 +343,8 @@ export class SymbolExtractor {
 
             // ClassDeclaration Extractor
             ClassDeclaration: (path: NodePath<ClassDeclaration>) => {
-                this.extractSymbol({ path, parsedFile, symbolKind: "class" });
+                const parentFunction = this.getParentFunctionSymbolForClass(path, parsedFile);
+                this.extractSymbol({ path, parsedFile, symbolKind: "class", parentSymbolId: parentFunction?.id });
             },
 
             // ClassExpression Extractor
@@ -303,6 +365,7 @@ export class SymbolExtractor {
                     path.node.init?.type === "ClassExpression"
                 ) return;
 
+                const parentFunction = this.getParentFunctionSymbolForVariable(path, parsedFile);
                 const names = this.getVariableName(path);
 
                 for (const name of names) {
@@ -312,7 +375,8 @@ export class SymbolExtractor {
                             name,
                             symbolKind: "variable",
                             path,
-                            parsedFile
+                            parsedFile,
+                            parentSymbolId: parentFunction?.id
                         })
                     );
                 }
