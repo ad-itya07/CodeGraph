@@ -1,6 +1,6 @@
 import { ParsedFile } from "../models/ParsedFile.js";
 import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, ClassPrivateMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, ClassPrivateMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, ObjectProperty, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
 import { MethodKind, ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
 type SupportedSymbolNode =
@@ -15,7 +15,8 @@ type SupportedSymbolNode =
     | TSTypeAliasDeclaration
     | ClassMethod
     | ObjectMethod
-    | ClassPrivateMethod;
+    | ClassPrivateMethod
+    | ObjectProperty;
 
 interface BuildSymbolParams {
     name: string;
@@ -63,6 +64,19 @@ export class SymbolExtractor {
             }
         }
 
+        // Handling cases like: `const user = { fn: () => {}, a: class {}, getUser: function () {} }`
+        if (path.parentPath?.isObjectProperty()) {
+            const key = path.parentPath.node.key;
+
+            if (key.type === "Identifier") {
+                return key.name;
+            }
+
+            if (key.type === "StringLiteral") {
+                return key.value;
+            }
+        }
+
         if (path.isClassDeclaration() || path.isClassExpression()) {
             return path.node.id?.name || "";
         }
@@ -94,6 +108,14 @@ export class SymbolExtractor {
         if (path.isObjectMethod()) {
             const key = path.node.key;
             if (key.type === "Identifier") return key.name;
+        }
+
+        if (path.isObjectProperty()) {
+            const key = path.node.key;
+
+            if (key.type === "Identifier") return key.name;
+
+            if (key.type === "StringLiteral") return key.value;
         }
 
         return null;
@@ -265,27 +287,48 @@ export class SymbolExtractor {
             },
 
             // Variable Extractor
-            VariableDeclarator: (path: NodePath<VariableDeclarator>) => {
-                if (
-                    path.node.init?.type === "ArrowFunctionExpression" ||
-                    path.node.init?.type === "FunctionExpression" ||
-                    path.node.init?.type === "ClassExpression"
-                ) return;
+            VariableDeclarator: {
+                enter: (path: NodePath<VariableDeclarator>) => {
+                    if (
+                        path.node.init?.type === "ArrowFunctionExpression" ||
+                        path.node.init?.type === "FunctionExpression" ||
+                        path.node.init?.type === "ClassExpression"
+                    ) return;
 
-                const names = this.getVariableName(path);
-                const parentSymbol = this.symbolStack.at(-1);
+                    const names = this.getVariableName(path);
+                    const parentSymbol = this.symbolStack.at(-1);
 
-                for (const name of names) {
-                    this.addSymbol(
-                        parsedFile,
-                        this.buildSymbol({
+                    const symbols: ParsedSymbol[] = [];
+
+                    for (const name of names) {
+                        const symbol = this.buildSymbol({
                             name,
                             symbolKind: "variable",
                             path,
                             parsedFile,
                             parentSymbolId: parentSymbol?.id
-                        })
-                    );
+                        });
+
+                        this.addSymbol(parsedFile, symbol);
+                        symbols.push(symbol);
+                    }
+
+                    if (
+                        path.node.init?.type === "ObjectExpression" &&
+                        path.node.id.type === "Identifier"
+                    ) {
+                        const symbol = symbols[0];
+
+                        if (symbol) {
+                            this.symbolStack.push(symbol);
+                            path.setData("symbolPushed", true);
+                        }
+                    }
+                },
+                exit: (path: NodePath<VariableDeclarator>) => {
+                    if (path.getData("symbolPushed")) {
+                        this.symbolStack.pop();
+                    }
                 }
             },
 
@@ -325,6 +368,31 @@ export class SymbolExtractor {
                     methodKind: this.getMethodKind(path)
                 })
             ),
+
+            // ObjectProperty Extractor `const user = { name: "Aditya" }`
+            ObjectProperty: {
+                enter: (path: NodePath<ObjectProperty>) => {
+                    if (path.parentPath?.isObjectPattern()) return;
+
+                    if (
+                        path.node.value.type === "ArrowFunctionExpression" ||
+                        path.node.value.type === "ClassExpression" ||
+                        path.node.value.type === "FunctionExpression"
+                    ) return;
+
+                    const symbol = this.extractSymbol({ path, parsedFile, symbolKind: "objectProperty" });
+                    
+                    if (symbol && path.node.value.type === "ObjectExpression") {
+                        this.symbolStack.push(symbol);
+                        path.setData("symbolPushed", true);
+                    }
+                },
+                exit: (path: NodePath<ObjectProperty>) => {
+                    if (path.getData("symbolPushed")) {
+                        this.symbolStack.pop();
+                    }
+                }
+            }
         })
     }
 }
