@@ -5,7 +5,8 @@ export type SymbolKind =
     | "interface"
     | "variable"
     | "enum"
-    | "typeAlias";
+    | "typeAlias"
+    | "objectProperty";
 
 export interface SymbolLocation {
     startLine: number;
