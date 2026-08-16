@@ -9,6 +9,7 @@ const CALLABLE_EXPRESSION_TYPES = new Set([
 ]);
 
 export class RelationshipExtractor {
+    // Finding symbol for a given node based on start-line and start-column
     private findSymbolForNode(parsedFile: ParsedFile, node: Node): ParsedSymbol | undefined {
         const location = node.loc;
         if (!location) return undefined;
@@ -20,6 +21,7 @@ export class RelationshipExtractor {
         );
     }
 
+    // building relationship
     private buildRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol): ParsedRelationship {
         return {
             id: `${sourceSymbol.id}:${"calls"}:${targetSymbol.id}`,
@@ -31,11 +33,15 @@ export class RelationshipExtractor {
         }
     }
 
+    // adding relationship to parsed-relationships array
     private addRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol) {
         const relationship = this.buildRelationship(sourceSymbol, targetSymbol);
         this.parsedRelationships.push(relationship);
     }
 
+    /* ===========================
+    * Helper functions for target-symbol finding from bindings
+    =========================== */
     private getNodeFromBinding(binding: Binding): Node | undefined {
         const node = binding.path.node;
         if (node.type === "FunctionDeclaration") {
@@ -57,6 +63,10 @@ export class RelationshipExtractor {
         return this.findSymbolForNode(parsedFile, symbolNode);
     }
 
+    /* ===========================
+    * Helper function for pushing and popping symbols from symbol stack
+    * And generalized helper function for symbol visitor
+    =========================== */
     private pushSymbolForNode(parsedFile: ParsedFile, node: Node) {
         const symbol = this.findSymbolForNode(parsedFile, node);
         if (symbol) this.symbolStack.push(symbol);
@@ -78,6 +88,9 @@ export class RelationshipExtractor {
         };
     }
 
+    /* ===========================
+    * Symbol Stack and Parsed Relationships
+    =========================== */
     private symbolStack: ParsedSymbol[] = [];
     private parsedRelationships: ParsedRelationship[] = [];
 
