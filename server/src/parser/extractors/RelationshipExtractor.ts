@@ -107,6 +107,12 @@ export class RelationshipExtractor {
 
                 FunctionExpression: this.createSymbolScopeVisitor(parsedFile),
 
+                ClassMethod: this.createSymbolScopeVisitor(parsedFile),
+
+                ObjectMethod: this.createSymbolScopeVisitor(parsedFile),
+
+                ClassPrivateMethod: this.createSymbolScopeVisitor(parsedFile),
+
                 CallExpression: (path) => {
                     const callee = path.node.callee;
                     if (callee.type !== "Identifier") return;
