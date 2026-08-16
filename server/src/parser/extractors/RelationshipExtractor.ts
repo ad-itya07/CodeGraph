@@ -2,7 +2,6 @@ import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
 import { ParsedRelationship } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
-import { FunctionDeclaration } from "@babel/types";
 
 const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -58,6 +57,27 @@ export class RelationshipExtractor {
         return this.findSymbolForNode(parsedFile, symbolNode);
     }
 
+    private pushSymbolForNode(parsedFile: ParsedFile, node: Node) {
+        const symbol = this.findSymbolForNode(parsedFile, node);
+        if (symbol) this.symbolStack.push(symbol);
+    }
+
+    private popSymbolForNode(parsedFile: ParsedFile, node: Node) {
+        const symbol = this.findSymbolForNode(parsedFile, node);
+        if (symbol && this.symbolStack.at(-1)?.id === symbol.id) this.symbolStack.pop();
+    }
+
+    private createSymbolScopeVisitor(parsedFile: ParsedFile) {
+        return {
+            enter: (path: NodePath) => {
+                this.pushSymbolForNode(parsedFile, path.node);
+            },
+            exit: (path: NodePath) => {
+                this.popSymbolForNode(parsedFile, path.node);
+            }
+        };
+    }
+
     private symbolStack: ParsedSymbol[] = [];
     private parsedRelationships: ParsedRelationship[] = [];
 
@@ -68,16 +88,12 @@ export class RelationshipExtractor {
             this.symbolStack = [];
 
             traverse.default(parsedFile.ast, {
-                FunctionDeclaration: {
-                    enter: (path: NodePath<FunctionDeclaration>) => {
-                        const symbol = this.findSymbolForNode(parsedFile, path.node);
-                        if (symbol) this.symbolStack.push(symbol);
-                    },
-                    exit: (path: NodePath<FunctionDeclaration>) => {
-                        const symbol = this.findSymbolForNode(parsedFile, path.node);
-                        if (symbol && this.symbolStack.at(-1)?.id === symbol.id) this.symbolStack.pop();
-                    }
-                },
+                FunctionDeclaration: this.createSymbolScopeVisitor(parsedFile),
+
+                ArrowFunctionExpression: this.createSymbolScopeVisitor(parsedFile),
+
+                FunctionExpression: this.createSymbolScopeVisitor(parsedFile),
+
                 CallExpression: (path) => {
                     const callee = path.node.callee;
                     if (callee.type !== "Identifier") return;
