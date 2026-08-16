@@ -2,6 +2,7 @@ import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
 import { ParsedRelationship } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
+import { CallExpression } from "@babel/types";
 
 const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -40,30 +41,6 @@ export class RelationshipExtractor {
     }
 
     /* ===========================
-    * Helper functions for target-symbol finding from bindings
-    =========================== */
-    private getNodeFromBinding(binding: Binding): Node | undefined {
-        const node = binding.path.node;
-        if (node.type === "FunctionDeclaration") {
-            return node;
-        }
-        if (node.type === "VariableDeclarator" &&
-            node.init &&
-            CALLABLE_EXPRESSION_TYPES.has(node.init.type)) {
-            return node.init;
-        }
-        return undefined;
-    }
-
-    private resolveBindingsToSymbols(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
-        const symbolNode = this.getNodeFromBinding(binding);
-
-        if (!symbolNode) return undefined;
-
-        return this.findSymbolForNode(parsedFile, symbolNode);
-    }
-
-    /* ===========================
     * Helper function for pushing and popping symbols from symbol stack
     * And generalized helper function for symbol visitor
     =========================== */
@@ -86,6 +63,87 @@ export class RelationshipExtractor {
                 this.popSymbolForNode(parsedFile, path.node);
             }
         };
+    }
+
+    /* ===========================
+    * Helper functions for target-symbol finding from bindings
+    =========================== */
+    private getNodeFromBinding(binding: Binding): Node | undefined {
+        const node = binding.path.node;
+        if (node.type === "FunctionDeclaration" ||
+            node.type === "ClassMethod"
+        ) {
+            return node;
+        }
+        if (node.type === "VariableDeclarator") {
+            if (node.init && CALLABLE_EXPRESSION_TYPES.has(node.init.type)) {
+                return node.init;
+            }
+            return node;
+        }
+        return undefined;
+    }
+
+    private resolveBindingsToSymbols(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
+        const symbolNode = this.getNodeFromBinding(binding);
+
+        if (!symbolNode) return undefined;
+
+        return this.findSymbolForNode(parsedFile, symbolNode);
+    }
+
+    /* ===========================
+    * Helper function to resolve call-targets from call expressions
+    =========================== */
+    private resolveCallTarget(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
+        const callee = path.node.callee;
+
+        if (callee.type === "Identifier") {
+            return this.resolveIdentifierCallToSymbol(parsedFile, path);
+        }
+
+        if (callee.type === "MemberExpression") {
+            return this.resolveMemberExpressionCallToSymbol(parsedFile, path);
+        }
+
+        return undefined;
+    }
+
+    // Helper function for resolving target symbol for callee.type === "Identifier"
+    private resolveIdentifierCallToSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
+        const callee = path.node.callee;
+        if (callee.type !== "Identifier") return;
+
+        const binding = path.scope.getBinding(callee.name);
+        if (!binding) return;
+
+        const targetSymbol = this.resolveBindingsToSymbols(parsedFile, binding);
+        return targetSymbol;
+    }
+
+    // Helper function for resolving target symbol for callee.type === "MemberExpression"
+    private resolveMemberExpressionCallToSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
+        const callee = path.node.callee;
+        if (callee.type !== "MemberExpression") return;
+
+        const object = callee.object;
+        const property = callee.property;
+
+        if (object.type !== "Identifier") return;
+        if (property.type !== "Identifier") return;
+
+        const binding = path.scope.getBinding(object.name);
+        if (!binding) return;
+
+        const objSymbol = this.resolveBindingsToSymbols(parsedFile, binding);
+        if (!objSymbol) return;
+
+        const targetSymbol = parsedFile.symbols.find((symbol) => {
+            return symbol.name === property.name &&
+                symbol.parentSymbolId === objSymbol.id;
+        });
+
+        return targetSymbol;
     }
 
     /* ===========================
@@ -114,13 +172,7 @@ export class RelationshipExtractor {
                 ClassPrivateMethod: this.createSymbolScopeVisitor(parsedFile),
 
                 CallExpression: (path) => {
-                    const callee = path.node.callee;
-                    if (callee.type !== "Identifier") return;
-
-                    const binding = path.scope.getBinding(callee.name);
-                    if (!binding) return;
-
-                    const targetSymbol = this.resolveBindingsToSymbols(parsedFile, binding);
+                    const targetSymbol = this.resolveCallTarget(parsedFile, path);
                     if (!targetSymbol) return;
 
                     const sourceSymbol = this.symbolStack.at(-1);
