@@ -93,6 +93,7 @@ export class RelationshipExtractor {
         return this.findSymbolForNode(parsedFile, symbolNode);
     }
 
+    // Helper function to resolve the binding of the binding of NewExpression to its class symbol
     private resolveNewExpressionBindingToClassSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
         const node = binding.path.node;
         if (node.type !== "VariableDeclarator" || node.init?.type !== "NewExpression") return undefined;
@@ -135,6 +136,7 @@ export class RelationshipExtractor {
         return targetSymbol;
     }
 
+    // Helper function to resolve the parent symbol for the object initialised in NewExpression
     private resolveIdentifierObjectToParentSymbol(parsedFile: ParsedFile, objectName: string, path: NodePath<CallExpression>): ParsedSymbol | undefined {
         const binding = path.scope.getBinding(objectName);
         if (!binding) return undefined;
@@ -152,6 +154,7 @@ export class RelationshipExtractor {
         return this.resolveBindingToSymbol(parsedFile, binding);
     }
 
+    // Helper function to find the enclosing class for the method called in ThisExpression
     private findEnclosingClassSymbol(parsedFile: ParsedFile, symbol: ParsedSymbol): ParsedSymbol | undefined {
         let currentSymbol: ParsedSymbol | undefined = symbol;
 
@@ -172,6 +175,7 @@ export class RelationshipExtractor {
         return undefined;
     }
 
+    // Function to resolve the ThisExpression to its parent class symbol
     private resolveThisToParentSymbol(parsedFile: ParsedFile): ParsedSymbol | undefined {
         const currentSymbol = this.symbolStack.at(-1);
         if (!currentSymbol) return;
@@ -179,6 +183,7 @@ export class RelationshipExtractor {
         return this.findEnclosingClassSymbol(parsedFile, currentSymbol);
     }
 
+    // Helper function to resolve the parent symbol for the object in MemberExpression
     private resolveMemberExpressionObjectToParentSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
         const callee = path.node.callee;
         if (callee.type !== "MemberExpression") return;
