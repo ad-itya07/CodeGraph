@@ -139,27 +139,44 @@ export class RelationshipExtractor {
         const binding = path.scope.getBinding(objectName);
         if (!binding) return undefined;
 
-    if (
-        binding.path.node.type === "VariableDeclarator" &&
-        binding.path.node.init?.type === "NewExpression"
-    ) {
-        return this.resolveNewExpressionBindingToClassSymbol(
-            parsedFile,
-            binding
-        );
+        if (
+            binding.path.node.type === "VariableDeclarator" &&
+            binding.path.node.init?.type === "NewExpression"
+        ) {
+            return this.resolveNewExpressionBindingToClassSymbol(
+                parsedFile,
+                binding
+            );
+        }
+
+        return this.resolveBindingToSymbol(parsedFile, binding);
     }
 
-    return this.resolveBindingToSymbol(parsedFile, binding);
-}
+    private findEnclosingClassSymbol(parsedFile: ParsedFile, symbol: ParsedSymbol): ParsedSymbol | undefined {
+        let currentSymbol: ParsedSymbol | undefined = symbol;
+
+        while (currentSymbol) {
+            if (currentSymbol.symbolKind === "class") {
+                return currentSymbol;
+            }
+
+            if (!currentSymbol.parentSymbolId) {
+                return undefined;
+            }
+
+            currentSymbol = parsedFile.symbols.find(
+                candidate => candidate.id === currentSymbol!.parentSymbolId
+            );
+        }
+
+        return undefined;
+    }
 
     private resolveThisToParentSymbol(parsedFile: ParsedFile): ParsedSymbol | undefined {
         const currentSymbol = this.symbolStack.at(-1);
+        if (!currentSymbol) return;
 
-        if (!currentSymbol?.parentSymbolId) return undefined;
-
-        return parsedFile.symbols.find(
-            symbol => symbol.id === currentSymbol.parentSymbolId
-        );
+        return this.findEnclosingClassSymbol(parsedFile, currentSymbol);
     }
 
     private resolveMemberExpressionObjectToParentSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
