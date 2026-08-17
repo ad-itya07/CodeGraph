@@ -68,10 +68,11 @@ export class RelationshipExtractor {
     /* ===========================
     * Helper functions for target-symbol finding from bindings
     =========================== */
-    private getNodeFromBinding(binding: Binding): Node | undefined {
+    private getSymbolNodeFromBinding(binding: Binding): Node | undefined {
         const node = binding.path.node;
         if (node.type === "FunctionDeclaration" ||
-            node.type === "ClassMethod"
+            node.type === "ClassMethod" ||
+            node.type === "ClassDeclaration"
         ) {
             return node;
         }
@@ -84,12 +85,25 @@ export class RelationshipExtractor {
         return undefined;
     }
 
-    private resolveBindingsToSymbols(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
-        const symbolNode = this.getNodeFromBinding(binding);
+    private resolveBindingToSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
+        const symbolNode = this.getSymbolNodeFromBinding(binding);
 
         if (!symbolNode) return undefined;
 
         return this.findSymbolForNode(parsedFile, symbolNode);
+    }
+
+    private resolveNewExpressionBindingToClassSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
+        const node = binding.path.node;
+        if (node.type !== "VariableDeclarator" || node.init?.type !== "NewExpression") return undefined;
+
+        const callee = node.init.callee;
+        if (callee.type !== "Identifier") return undefined;
+
+        const classBinding = binding.path.scope.getBinding(callee.name);
+        if (!classBinding) return undefined;
+
+        return this.resolveBindingToSymbol(parsedFile, classBinding);
     }
 
     /* ===========================
@@ -117,8 +131,51 @@ export class RelationshipExtractor {
         const binding = path.scope.getBinding(callee.name);
         if (!binding) return;
 
-        const targetSymbol = this.resolveBindingsToSymbols(parsedFile, binding);
+        const targetSymbol = this.resolveBindingToSymbol(parsedFile, binding);
         return targetSymbol;
+    }
+
+    private resolveIdentifierObjectToParentSymbol(parsedFile: ParsedFile, objectName: string, path: NodePath<CallExpression>): ParsedSymbol | undefined {
+        const binding = path.scope.getBinding(objectName);
+        if (!binding) return undefined;
+
+    if (
+        binding.path.node.type === "VariableDeclarator" &&
+        binding.path.node.init?.type === "NewExpression"
+    ) {
+        return this.resolveNewExpressionBindingToClassSymbol(
+            parsedFile,
+            binding
+        );
+    }
+
+    return this.resolveBindingToSymbol(parsedFile, binding);
+}
+
+    private resolveThisToParentSymbol(parsedFile: ParsedFile): ParsedSymbol | undefined {
+        const currentSymbol = this.symbolStack.at(-1);
+
+        if (!currentSymbol?.parentSymbolId) return undefined;
+
+        return parsedFile.symbols.find(
+            symbol => symbol.id === currentSymbol.parentSymbolId
+        );
+    }
+
+    private resolveMemberExpressionObjectToParentSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
+        const callee = path.node.callee;
+        if (callee.type !== "MemberExpression") return;
+
+        const object = callee.object;
+
+        if (object.type === "ThisExpression") {
+            return this.resolveThisToParentSymbol(parsedFile);
+        }
+
+        if (object.type === "Identifier") {
+            return this.resolveIdentifierObjectToParentSymbol(parsedFile, object.name, path);
+        }
+        return undefined;
     }
 
     // Helper function for resolving target symbol for callee.type === "MemberExpression"
@@ -126,21 +183,16 @@ export class RelationshipExtractor {
         const callee = path.node.callee;
         if (callee.type !== "MemberExpression") return;
 
-        const object = callee.object;
         const property = callee.property;
 
-        if (object.type !== "Identifier") return;
         if (property.type !== "Identifier") return;
 
-        const binding = path.scope.getBinding(object.name);
-        if (!binding) return;
-
-        const objSymbol = this.resolveBindingsToSymbols(parsedFile, binding);
-        if (!objSymbol) return;
+        const parentSymbol = this.resolveMemberExpressionObjectToParentSymbol(parsedFile, path);
+        if (!parentSymbol) return;
 
         const targetSymbol = parsedFile.symbols.find((symbol) => {
             return symbol.name === property.name &&
-                symbol.parentSymbolId === objSymbol.id;
+                symbol.parentSymbolId === parentSymbol.id;
         });
 
         return targetSymbol;
