@@ -2,7 +2,7 @@ import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
 import { ParsedRelationship, RelationshipKind } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
-import { CallExpression, ClassDeclaration, ClassExpression } from "@babel/types";
+import { CallExpression, ClassDeclaration, ClassExpression, NewExpression } from "@babel/types";
 
 const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -311,6 +311,29 @@ export class RelationshipExtractor {
     }
 
     /* =======================================================
+    * INSTANTIATES Realtionship
+    ======================================================== */
+    private extractInstantiatesRelationship(parsedFile: ParsedFile, path: NodePath<NewExpression>) {
+        const parent = path.parent;
+
+        if (parent.type !== "VariableDeclarator") return;
+
+        const sourceSymbol = this.findSymbolForNode(parsedFile, parent);
+        if (!sourceSymbol) return;
+
+        const callee = path.node.callee;
+        if (callee.type !== "Identifier") return;
+
+        const binding = path.scope.getBinding(callee.name);
+        if (!binding) return;
+
+        const targetSymbol = this.resolveBindingToSymbol(parsedFile, binding);
+        if (!targetSymbol) return;
+
+        this.addRelationship(sourceSymbol, targetSymbol, "instantiates");
+    }
+
+    /* =======================================================
     * Symbol Stack and Parsed Relationships
     ======================================================= */
     private symbolStack: ParsedSymbol[] = [];
@@ -338,11 +361,13 @@ export class RelationshipExtractor {
 
                 ClassPrivateMethod: this.createSymbolScopeVisitor(parsedFile),
 
+                // Handle EXTENDS and IMPLEMENTS relationships for class-declaration
                 ClassDeclaration: (path) => {
                     this.extractExtendsRelationship(parsedFile, path);
                     this.extractImplementsRelationship(parsedFile, path);
                 },
 
+                // Handle EXTENDS and IMPLEMENTS relationships for class-expression
                 ClassExpression: (path) => {
                     this.extractExtendsRelationship(parsedFile, path);
                     this.extractImplementsRelationship(parsedFile, path);
@@ -350,6 +375,10 @@ export class RelationshipExtractor {
 
                 CallExpression: (path) => {
                     this.extractCallRelationship(parsedFile, path);
+                },
+
+                NewExpression: (path) => {
+                    this.extractInstantiatesRelationship(parsedFile, path);
                 },
             })
         }
