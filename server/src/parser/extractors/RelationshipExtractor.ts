@@ -1,6 +1,6 @@
 import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
-import { ParsedRelationship } from "../models/ParsedRelationship.js";
+import { ParsedRelationship, RelationshipKind } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
 import { CallExpression } from "@babel/types";
 
@@ -23,20 +23,20 @@ export class RelationshipExtractor {
     }
 
     // building relationship
-    private buildRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol): ParsedRelationship {
+    private buildRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol, relationshipKind: RelationshipKind): ParsedRelationship {
         return {
             id: `${sourceSymbol.id}:${"calls"}:${targetSymbol.id}`,
             sourceId: sourceSymbol.id,
             sourceKind: "symbol",
             targetId: targetSymbol.id,
             targetKind: "symbol",
-            relationshipKind: "calls",
+            relationshipKind,
         }
     }
 
     // adding relationship to parsed-relationships array
-    private addRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol) {
-        const relationship = this.buildRelationship(sourceSymbol, targetSymbol);
+    private addRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol, relationshipKind: RelationshipKind) {
+        const relationship = this.buildRelationship(sourceSymbol, targetSymbol, relationshipKind);
         this.parsedRelationships.push(relationship);
     }
 
@@ -245,6 +245,24 @@ export class RelationshipExtractor {
 
                 ClassPrivateMethod: this.createSymbolScopeVisitor(parsedFile),
 
+                ClassDeclaration: (path) => {
+                    const sourceSymbol = this.findSymbolForNode(parsedFile, path.node);
+                    if (!sourceSymbol) return;
+
+                    const superClass = path.node.superClass;
+                    if (!superClass) return;
+
+                    if (superClass.type !== "Identifier") return;
+
+                    const binding = path.scope.getBinding(superClass.name);
+                    if (!binding) return;
+
+                    const parentSymbol = this.resolveBindingToSymbol(parsedFile, binding);
+                    if (!parentSymbol) return;
+
+                    this.addRelationship(sourceSymbol, parentSymbol, "extends");
+                },
+
                 CallExpression: (path) => {
                     const targetSymbol = this.resolveCallTarget(parsedFile, path);
                     if (!targetSymbol) return;
@@ -252,7 +270,7 @@ export class RelationshipExtractor {
                     const sourceSymbol = this.symbolStack.at(-1);
                     if (!sourceSymbol) return;
 
-                    this.addRelationship(sourceSymbol, targetSymbol);
+                    this.addRelationship(sourceSymbol, targetSymbol, "calls");
                 },
             })
         }
