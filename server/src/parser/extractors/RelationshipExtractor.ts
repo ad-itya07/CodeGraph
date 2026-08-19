@@ -29,7 +29,7 @@ export class RelationshipExtractor {
     // building relationship
     private buildRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol, relationshipKind: RelationshipKind): ParsedRelationship {
         return {
-            id: `${sourceSymbol.id}:${"calls"}:${targetSymbol.id}`,
+            id: `${sourceSymbol.id}:${relationshipKind}:${targetSymbol.id}`,
             sourceId: sourceSymbol.id,
             sourceKind: "symbol",
             targetId: targetSymbol.id,
@@ -84,7 +84,8 @@ export class RelationshipExtractor {
         const node = binding.path.node;
         if (node.type === "FunctionDeclaration" ||
             node.type === "ClassMethod" ||
-            node.type === "ClassDeclaration"
+            node.type === "ClassDeclaration" ||
+            node.type === "TSInterfaceDeclaration"
         ) {
             return node;
         }
@@ -270,9 +271,48 @@ export class RelationshipExtractor {
         this.addRelationship(classSymbol, parentClassSymbol, "extends");
     }
 
-    /* ===========================
+    /* =======================================================
+    * IMPLEMENTS Realtionship
+    ======================================================== */
+
+    // Helper function to reslolve the type-interface-symbol for the implemented class using name-search
+    private resolveImplementedSymbol(parsedFile: ParsedFile, expression: Node): ParsedSymbol | undefined {
+        if (expression.type !== "Identifier") return;
+
+        return parsedFile.symbols.find(
+            symbol =>
+                symbol.name === expression.name &&
+                (
+                    symbol.symbolKind === "interface" ||
+                    symbol.symbolKind === "typeAlias"
+                )
+        );
+    }
+
+    // Helper function extract the IMPLEMENTS relationship
+    private extractImplementsRelationship(parsedFile: ParsedFile, path: NodePath<ClassDeclaration | ClassExpression>) {
+        const classSymbol = this.findSymbolForNode(parsedFile, path.node);
+        if (!classSymbol) return;
+
+        const implementedInterfaces = path.node.implements;
+        if (!implementedInterfaces) return;
+
+        for (const implementedInterface of implementedInterfaces) {
+            if (implementedInterface.type !== "TSExpressionWithTypeArguments") continue;
+
+            const expression = implementedInterface.expression;
+            if (expression.type !== "Identifier") continue;
+
+            const interfaceSymbol = this.resolveImplementedSymbol(parsedFile, expression);
+            if (!interfaceSymbol) continue;
+
+            this.addRelationship(classSymbol, interfaceSymbol, "implements");
+        }
+    }
+
+    /* =======================================================
     * Symbol Stack and Parsed Relationships
-    =========================== */
+    ======================================================= */
     private symbolStack: ParsedSymbol[] = [];
     private parsedRelationships: ParsedRelationship[] = [];
 
@@ -300,10 +340,12 @@ export class RelationshipExtractor {
 
                 ClassDeclaration: (path) => {
                     this.extractExtendsRelationship(parsedFile, path);
+                    this.extractImplementsRelationship(parsedFile, path);
                 },
 
                 ClassExpression: (path) => {
                     this.extractExtendsRelationship(parsedFile, path);
+                    this.extractImplementsRelationship(parsedFile, path);
                 },
 
                 CallExpression: (path) => {
