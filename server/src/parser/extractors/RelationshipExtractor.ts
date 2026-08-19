@@ -2,7 +2,7 @@ import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
 import { ParsedRelationship, RelationshipKind } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
-import { CallExpression } from "@babel/types";
+import { CallExpression, ClassDeclaration, ClassExpression } from "@babel/types";
 
 const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -10,6 +10,10 @@ const CALLABLE_EXPRESSION_TYPES = new Set([
 ]);
 
 export class RelationshipExtractor {
+    /* =======================================================
+     * Generic Symbol & Relationship Helpers
+     * ==================================================== */
+
     // Finding symbol for a given node based on start-line and start-column
     private findSymbolForNode(parsedFile: ParsedFile, node: Node): ParsedSymbol | undefined {
         const location = node.loc;
@@ -40,9 +44,13 @@ export class RelationshipExtractor {
         this.parsedRelationships.push(relationship);
     }
 
+    /* =======================================================
+     * Symbol Scope and Stack Management
+     * ==================================================== */
+
     /* ===========================
-    * Helper function for pushing and popping symbols from symbol stack
-    * And generalized helper function for symbol visitor
+     * Helper functions for pushing and popping symbols from symbol stack
+     * And generalized helper function for symbol visitor
     =========================== */
     private pushSymbolForNode(parsedFile: ParsedFile, node: Node) {
         const symbol = this.findSymbolForNode(parsedFile, node);
@@ -64,6 +72,10 @@ export class RelationshipExtractor {
             }
         };
     }
+
+    /* =======================================================
+     * Binding & Symbol Resolution
+     * ==================================================== */
 
     /* ===========================
     * Helper functions for target-symbol finding from bindings
@@ -92,6 +104,10 @@ export class RelationshipExtractor {
 
         return this.findSymbolForNode(parsedFile, symbolNode);
     }
+
+    /* =======================================================
+     * Calls Relationship Helper functions
+     * ==================================================== */
 
     // Helper function to resolve the binding of the binding of NewExpression to its class symbol
     private resolveNewExpressionBindingToClassSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
@@ -221,11 +237,48 @@ export class RelationshipExtractor {
     }
 
     /* ===========================
+    * Helper function to extract CALLS realtionship
+    =========================== */
+    private extractCallRelationship(parsedFile: ParsedFile, path: NodePath<CallExpression>) {
+        const targetSymbol = this.resolveCallTarget(parsedFile, path);
+        if (!targetSymbol) return;
+
+        const sourceSymbol = this.symbolStack.at(-1);
+        if (!sourceSymbol) return;
+
+        this.addRelationship(sourceSymbol, targetSymbol, "calls");
+    }
+
+    /* =======================================================
+    * EXTENDS Realtionship
+    ======================================================== */
+    private extractExtendsRelationship(parsedFile: ParsedFile, path: NodePath<ClassDeclaration | ClassExpression>) {
+        const classSymbol = this.findSymbolForNode(parsedFile, path.node);
+        if (!classSymbol) return;
+
+        const superClass = path.node.superClass;
+        if (!superClass) return;
+
+        if (superClass.type !== "Identifier") return;
+
+        const binding = path.scope.getBinding(superClass.name);
+        if (!binding) return;
+
+        const parentClassSymbol = this.resolveBindingToSymbol(parsedFile, binding);
+        if (!parentClassSymbol) return;
+
+        this.addRelationship(classSymbol, parentClassSymbol, "extends");
+    }
+
+    /* ===========================
     * Symbol Stack and Parsed Relationships
     =========================== */
     private symbolStack: ParsedSymbol[] = [];
     private parsedRelationships: ParsedRelationship[] = [];
 
+    /* =======================================================
+     * Main Extraction
+     * ==================================================== */
     extract(parsedFiles: ParsedFile[]): ParsedRelationship[] {
         this.parsedRelationships = [];
 
@@ -246,31 +299,15 @@ export class RelationshipExtractor {
                 ClassPrivateMethod: this.createSymbolScopeVisitor(parsedFile),
 
                 ClassDeclaration: (path) => {
-                    const sourceSymbol = this.findSymbolForNode(parsedFile, path.node);
-                    if (!sourceSymbol) return;
+                    this.extractExtendsRelationship(parsedFile, path);
+                },
 
-                    const superClass = path.node.superClass;
-                    if (!superClass) return;
-
-                    if (superClass.type !== "Identifier") return;
-
-                    const binding = path.scope.getBinding(superClass.name);
-                    if (!binding) return;
-
-                    const parentSymbol = this.resolveBindingToSymbol(parsedFile, binding);
-                    if (!parentSymbol) return;
-
-                    this.addRelationship(sourceSymbol, parentSymbol, "extends");
+                ClassExpression: (path) => {
+                    this.extractExtendsRelationship(parsedFile, path);
                 },
 
                 CallExpression: (path) => {
-                    const targetSymbol = this.resolveCallTarget(parsedFile, path);
-                    if (!targetSymbol) return;
-
-                    const sourceSymbol = this.symbolStack.at(-1);
-                    if (!sourceSymbol) return;
-
-                    this.addRelationship(sourceSymbol, targetSymbol, "calls");
+                    this.extractCallRelationship(parsedFile, path);
                 },
             })
         }
