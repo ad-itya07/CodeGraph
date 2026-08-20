@@ -316,19 +316,26 @@ export class RelationshipExtractor {
             const interfaceSymbol = this.resolveImplementedSymbol(parsedFile, expression);
             if (!interfaceSymbol) continue;
 
-            this.addRelationship({sourceId: classSymbol.id, sourceKind: "symbol", targetId: interfaceSymbol.id, targetKind: "symbol", relationshipKind: "implements"});
+            this.addRelationship({ sourceId: classSymbol.id, sourceKind: "symbol", targetId: interfaceSymbol.id, targetKind: "symbol", relationshipKind: "implements" });
         }
     }
 
     /* =======================================================
     * INSTANTIATES Realtionship
     ======================================================== */
-    private extractInstantiatesRelationship(parsedFile: ParsedFile, path: NodePath<NewExpression>) {
+    
+    // resolve source symbol for the NEW EXPRESSION for instantiating considering VariableDeclarator and Return statement
+    private resolveSourceSymbolForInstantiates(parsedFile: ParsedFile, path: NodePath<NewExpression>): ParsedSymbol | undefined {
         const parent = path.parent;
 
-        if (parent.type !== "VariableDeclarator") return;
+        if (parent.type === "VariableDeclarator") return this.findSymbolForNode(parsedFile, parent);
+        else if (parent.type === "ReturnStatement") return this.symbolStack.at(-1);
 
-        const sourceSymbol = this.findSymbolForNode(parsedFile, parent);
+        return undefined;
+    }
+
+    private extractInstantiatesRelationship(parsedFile: ParsedFile, path: NodePath<NewExpression>) {
+        const sourceSymbol = this.resolveSourceSymbolForInstantiates(parsedFile, path);
         if (!sourceSymbol) return;
 
         const callee = path.node.callee;
@@ -340,7 +347,7 @@ export class RelationshipExtractor {
         const targetSymbol = this.resolveBindingToSymbol(parsedFile, binding);
         if (!targetSymbol) return;
 
-        this.addRelationship({sourceId: sourceSymbol.id, sourceKind: "symbol", targetId: targetSymbol.id, targetKind: "symbol", relationshipKind: "instantiates"});
+        this.addRelationship({ sourceId: sourceSymbol.id, sourceKind: "symbol", targetId: targetSymbol.id, targetKind: "symbol", relationshipKind: "instantiates" });
     }
 
     /* =======================================================
