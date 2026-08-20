@@ -1,6 +1,6 @@
 import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
-import { ParsedRelationship, RelationshipKind } from "../models/ParsedRelationship.js";
+import { ParsedRelationship, RelationshipEntityKind, RelationshipKind } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
 import { CallExpression, ClassDeclaration, ClassExpression, NewExpression } from "@babel/types";
 
@@ -8,6 +8,16 @@ const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
     "FunctionExpression",
 ]);
+
+interface RelationshipOptions {
+    sourceId: string;
+    sourceKind: RelationshipEntityKind;
+
+    targetId: string;
+    targetKind: RelationshipEntityKind;
+
+    relationshipKind: RelationshipKind;
+}
 
 export class RelationshipExtractor {
     /* =======================================================
@@ -27,20 +37,20 @@ export class RelationshipExtractor {
     }
 
     // building relationship
-    private buildRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol, relationshipKind: RelationshipKind): ParsedRelationship {
+    private buildRelationship({ sourceId, sourceKind, targetId, targetKind, relationshipKind }: RelationshipOptions): ParsedRelationship {
         return {
-            id: `${sourceSymbol.id}:${relationshipKind}:${targetSymbol.id}`,
-            sourceId: sourceSymbol.id,
-            sourceKind: "symbol",
-            targetId: targetSymbol.id,
-            targetKind: "symbol",
+            id: `${sourceId}:${relationshipKind}:${targetId}`,
+            sourceId: sourceId,
+            sourceKind: sourceKind,
+            targetId: targetId,
+            targetKind: targetKind,
             relationshipKind,
         }
     }
 
     // adding relationship to parsed-relationships array
-    private addRelationship(sourceSymbol: ParsedSymbol, targetSymbol: ParsedSymbol, relationshipKind: RelationshipKind) {
-        const relationship = this.buildRelationship(sourceSymbol, targetSymbol, relationshipKind);
+    private addRelationship({ sourceId, sourceKind, targetId, targetKind, relationshipKind }: RelationshipOptions) {
+        const relationship = this.buildRelationship({ sourceId, sourceKind, targetId, targetKind, relationshipKind });
         this.parsedRelationships.push(relationship);
     }
 
@@ -247,7 +257,7 @@ export class RelationshipExtractor {
         const sourceSymbol = this.symbolStack.at(-1);
         if (!sourceSymbol) return;
 
-        this.addRelationship(sourceSymbol, targetSymbol, "calls");
+        this.addRelationship({ sourceId: sourceSymbol.id, sourceKind: "symbol", targetId: targetSymbol.id, targetKind: "symbol", relationshipKind: "calls" });
     }
 
     /* =======================================================
@@ -268,7 +278,7 @@ export class RelationshipExtractor {
         const parentClassSymbol = this.resolveBindingToSymbol(parsedFile, binding);
         if (!parentClassSymbol) return;
 
-        this.addRelationship(classSymbol, parentClassSymbol, "extends");
+        this.addRelationship({ sourceId: classSymbol.id, sourceKind: "symbol", targetId: parentClassSymbol.id, targetKind: "symbol", relationshipKind: "extends" });
     }
 
     /* =======================================================
@@ -306,7 +316,7 @@ export class RelationshipExtractor {
             const interfaceSymbol = this.resolveImplementedSymbol(parsedFile, expression);
             if (!interfaceSymbol) continue;
 
-            this.addRelationship(classSymbol, interfaceSymbol, "implements");
+            this.addRelationship({sourceId: classSymbol.id, sourceKind: "symbol", targetId: interfaceSymbol.id, targetKind: "symbol", relationshipKind: "implements"});
         }
     }
 
@@ -330,7 +340,7 @@ export class RelationshipExtractor {
         const targetSymbol = this.resolveBindingToSymbol(parsedFile, binding);
         if (!targetSymbol) return;
 
-        this.addRelationship(sourceSymbol, targetSymbol, "instantiates");
+        this.addRelationship({sourceId: sourceSymbol.id, sourceKind: "symbol", targetId: targetSymbol.id, targetKind: "symbol", relationshipKind: "instantiates"});
     }
 
     /* =======================================================
