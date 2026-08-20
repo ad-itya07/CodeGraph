@@ -2,7 +2,8 @@ import traverse, { Binding, Node, NodePath } from "@babel/traverse";
 import { ParsedFile } from "../models/ParsedFile.js";
 import { ParsedRelationship, RelationshipEntityKind, RelationshipKind } from "../models/ParsedRelationship.js";
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
-import { CallExpression, ClassDeclaration, ClassExpression, NewExpression } from "@babel/types";
+import { CallExpression, ClassDeclaration, ClassExpression, ImportDeclaration, NewExpression } from "@babel/types";
+import path from "node:path";
 
 const CALLABLE_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -323,7 +324,7 @@ export class RelationshipExtractor {
     /* =======================================================
     * INSTANTIATES Realtionship
     ======================================================== */
-    
+
     // resolve source symbol for the NEW EXPRESSION for instantiating considering VariableDeclarator and Return statement
     private resolveSourceSymbolForInstantiates(parsedFile: ParsedFile, path: NodePath<NewExpression>): ParsedSymbol | undefined {
         const parent = path.parent;
@@ -348,6 +349,41 @@ export class RelationshipExtractor {
         if (!targetSymbol) return;
 
         this.addRelationship({ sourceId: sourceSymbol.id, sourceKind: "symbol", targetId: targetSymbol.id, targetKind: "symbol", relationshipKind: "instantiates" });
+    }
+
+    /* =======================================================
+    * IMPORTS Relationship
+    ======================================================== */
+
+    // resolve import path to an absolute path
+    private resolveImportPath(parsedFile: ParsedFile, importSource: string): string | undefined {
+        if (!importSource.startsWith(".")) return undefined;
+
+        const currentDirectory = path.dirname(parsedFile.filePath);
+
+        return path.resolve(currentDirectory, importSource);
+    }
+
+    // finds the imported file among parsedFiles[]
+    private findParsedFileByResolvedPath(resolvedImportPath: string, parsedFiles: ParsedFile[]): ParsedFile | undefined {
+        return parsedFiles.find((parsedFile) => {
+            const parsedFilePathWithoutExtension = parsedFile.filePath.replace(/\.[^/.]+$/, "");
+
+            return parsedFilePathWithoutExtension === resolvedImportPath;
+        });
+    }
+
+    // extracts import relationship
+    private extractImportRelationship(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[]) {
+        const importSource = path.node.source.value;
+
+        const resolvedImportPath = this.resolveImportPath(parsedFile, importSource);
+        if (!resolvedImportPath) return;
+
+        const importedFile = this.findParsedFileByResolvedPath(resolvedImportPath, parsedFiles);
+        if (!importedFile) return;
+
+        this.addRelationship({sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports"});
     }
 
     /* =======================================================
@@ -397,6 +433,10 @@ export class RelationshipExtractor {
                 NewExpression: (path) => {
                     this.extractInstantiatesRelationship(parsedFile, path);
                 },
+
+                ImportDeclaration: (path) => {
+                    this.extractImportRelationship(parsedFile, path, parsedFiles);
+                }
             })
         }
         return this.parsedRelationships;
