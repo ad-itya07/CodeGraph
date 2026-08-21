@@ -5,9 +5,10 @@ import { ParsedSymbol } from "../models/ParsedSymbol.js";
 import { CallExpression, ClassDeclaration, ClassExpression, ImportDeclaration, NewExpression } from "@babel/types";
 import path from "node:path";
 
-const CALLABLE_EXPRESSION_TYPES = new Set([
+const SYMBOL_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
     "FunctionExpression",
+    "ClassExpression",
 ]);
 
 interface RelationshipOptions {
@@ -105,7 +106,7 @@ export class RelationshipExtractor {
             return node;
         }
         if (node.type === "VariableDeclarator") {
-            if (node.init && CALLABLE_EXPRESSION_TYPES.has(node.init.type)) {
+            if (node.init && SYMBOL_EXPRESSION_TYPES.has(node.init.type)) {
                 return node.init;
             }
             return node;
