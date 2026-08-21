@@ -1,6 +1,7 @@
 export type RelationshipEntityKind =
     | "file"
-    | "symbol";
+    | "symbol"
+    | "module";
 
 export type RelationshipKind =
     | "calls"
