@@ -52,6 +52,10 @@ export class RelationshipExtractor {
     // adding relationship to parsed-relationships array
     private addRelationship({ sourceId, sourceKind, targetId, targetKind, relationshipKind }: RelationshipOptions) {
         const relationship = this.buildRelationship({ sourceId, sourceKind, targetId, targetKind, relationshipKind });
+
+        const exists = this.parsedRelationships.some(existing => existing.id === relationship.id);
+        if (exists) return;
+
         this.parsedRelationships.push(relationship);
     }
 
@@ -373,6 +377,39 @@ export class RelationshipExtractor {
         });
     }
 
+    // helper function to get the Imported-Export-name based on the import-specifier or import-default-specifier
+    // for former we have the specifier.imported.type = Identifier or string-literal
+    private resolveImportedExportName(specifier: ImportDeclaration["specifiers"][number]): string | undefined {
+
+        // for import specifiers: "import { foo } from ./file"
+        if (specifier.type === "ImportSpecifier") {
+            return specifier.imported.type === "Identifier"
+                ? specifier.imported.name
+                : specifier.imported.value;
+        }
+
+        // for default import specifier: "import foo from ./file"
+        if (specifier.type === "ImportDefaultSpecifier") {
+            return "default";
+        }
+
+        return undefined;
+    }
+
+    // Extracts import relationships for import specifiers
+    private extractImportSpecifierRelationships(parsedFile: ParsedFile, importedFile: ParsedFile, path: NodePath<ImportDeclaration>) {
+        for (const specifier of path.node.specifiers) {
+
+            const importedName = this.resolveImportedExportName(specifier);
+            if (!importedName) continue;
+
+            const importedSymbol = importedFile.exports.find(exportedSymbol => exportedSymbol.exportedName === importedName);
+            if (!importedSymbol) continue;
+
+            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedSymbol.symbolId, targetKind: "symbol", relationshipKind: "imports" });
+        }
+    }
+
     // extracts import relationship
     private extractImportRelationship(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[]) {
         const importSource = path.node.source.value;
@@ -382,6 +419,9 @@ export class RelationshipExtractor {
 
         const importedFile = this.findParsedFileByResolvedPath(resolvedImportPath, parsedFiles);
         if (!importedFile) return;
+
+        // handling import specifiers here if any
+        this.extractImportSpecifierRelationships(parsedFile, importedFile, path);
 
         this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports" });
     }
