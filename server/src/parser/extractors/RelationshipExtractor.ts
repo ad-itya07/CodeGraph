@@ -383,7 +383,22 @@ export class RelationshipExtractor {
         const importedFile = this.findParsedFileByResolvedPath(resolvedImportPath, parsedFiles);
         if (!importedFile) return;
 
-        this.addRelationship({sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports"});
+        this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports" });
+    }
+
+    /* =======================================================
+    * EXPORTS Relationship
+    ======================================================== */
+    private extractExportRelationships(parsedFile: ParsedFile) {
+        for (const exportedSymbol of parsedFile.exports) {
+            this.addRelationship({
+                sourceId: parsedFile.filePath,
+                sourceKind: "file",
+                targetId: exportedSymbol.symbolId,
+                targetKind: "symbol",
+                relationshipKind: "exports",
+            });
+        }
     }
 
     /* =======================================================
@@ -399,6 +414,7 @@ export class RelationshipExtractor {
         this.parsedRelationships = [];
 
         for (const parsedFile of parsedFiles) {
+            this.extractExportRelationships(parsedFile);
             this.symbolStack = [];
 
             traverse.default(parsedFile.ast, {
