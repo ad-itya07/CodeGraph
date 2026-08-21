@@ -411,9 +411,21 @@ export class RelationshipExtractor {
         }
     }
 
+    // checks whether the module is external (like "react", "react-dom", etc.)
+    // TODO: right now anything starting with non-dot is considered as external like @components/button is also external
+    // so later we will make it specific to external-modules
+    private isExternalModule(importSource: string): boolean {
+        return !importSource.startsWith(".");
+    }
+
     // extracts import relationship
     private extractImportRelationship(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[]) {
         const importSource = path.node.source.value;
+
+        if (this.isExternalModule(importSource)) {
+            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importSource, targetKind: "module", relationshipKind: "imports" });
+            return;
+        }
 
         const resolvedImportPath = this.resolveImportPath(parsedFile, importSource);
         if (!resolvedImportPath) return;
