@@ -1,6 +1,6 @@
-import { ParsedFile } from "../models/ParsedFile.js";
-import traverse, { NodePath } from "@babel/traverse";
-import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, ClassPrivateMethod, FunctionDeclaration, FunctionExpression, ObjectMethod, ObjectProperty, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
+import { ParsedExport, ParsedFile } from "../models/ParsedFile.js";
+import traverse, { Binding, NodePath } from "@babel/traverse";
+import { ArrowFunctionExpression, ClassDeclaration, ClassExpression, ClassMethod, ClassPrivateMethod, ExportDefaultDeclaration, ExportNamedDeclaration, FunctionDeclaration, FunctionExpression, Node, ObjectMethod, ObjectProperty, TSEnumDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, VariableDeclarator } from "@babel/types";
 import { MethodKind, ParsedSymbol, SymbolKind, SymbolLocation } from "../models/ParsedSymbol.js";
 
 type SupportedSymbolNode =
@@ -17,6 +17,12 @@ type SupportedSymbolNode =
     | ObjectMethod
     | ClassPrivateMethod
     | ObjectProperty;
+
+const SYMBOL_INITIALIZER_TYPES = new Set([
+    "ArrowFunctionExpression",
+    "FunctionExpression",
+    "ClassExpression",
+]);
 
 interface BuildSymbolParams {
     name: string;
@@ -225,6 +231,201 @@ export class SymbolExtractor {
         return [];
     }
 
+    /* =======================================================
+    * Handling parsedFile.exports 
+    ======================================================== */
+
+    /* ===========================
+    * Helper functions for target-symbol finding from bindings
+    =========================== */
+
+    // Finding symbol for a given node based on start-line and start-column
+    private findSymbolForNode(parsedFile: ParsedFile, node: Node): ParsedSymbol | undefined {
+        const location = node.loc;
+        if (!location) return undefined;
+
+        return parsedFile.symbols.find(
+            symbol =>
+                symbol.location.startLine === location.start.line &&
+                symbol.location.startColumn === location.start.column
+        );
+    }
+    private getSymbolNodeFromBinding(binding: Binding): Node | undefined {
+        const node = binding.path.node;
+        if (node.type === "FunctionDeclaration" ||
+            node.type === "ClassMethod" ||
+            node.type === "ClassDeclaration" ||
+            node.type === "TSInterfaceDeclaration"
+        ) {
+            return node;
+        }
+        if (node.type === "VariableDeclarator") {
+            if (node.init && SYMBOL_INITIALIZER_TYPES.has(node.init.type)) {
+                return node.init;
+            }
+            return node;
+        }
+        return undefined;
+    }
+
+    private resolveBindingToSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
+        const symbolNode = this.getSymbolNodeFromBinding(binding);
+
+        if (!symbolNode) return undefined;
+
+        return this.findSymbolForNode(parsedFile, symbolNode);
+    }
+    /* ========================
+    * For Named Exports
+    ======================== */
+
+    // helper function to get symbol for export function, class, interface, type, enum
+    private resolveNamedExportDeclarationSymbol(parsedFile: ParsedFile, declaration: Node): ParsedExport | undefined {
+        if (
+            declaration.type !== "FunctionDeclaration" &&
+            declaration.type !== "ClassDeclaration" &&
+            declaration.type !== "TSInterfaceDeclaration" &&
+            declaration.type !== "TSTypeAliasDeclaration" &&
+            declaration.type !== "TSEnumDeclaration"
+        ) {
+            return undefined;
+        }
+
+        const symbol = this.findSymbolForNode(parsedFile, declaration);
+
+        if (!symbol) return undefined;
+
+        return { exportedName: symbol.name, symbolId: symbol.id };
+    }
+
+    // helper function to get symbol for export var, let, const, arrow function, class expression, function expression
+    private resolveNamedExportVariableSymbols(parsedFile: ParsedFile, declaration: Node): ParsedExport[] {
+        if (declaration.type !== "VariableDeclaration") return [];
+
+        const exportedSymbols: ParsedExport[] = [];
+
+        for (const declarator of declaration.declarations) {
+            if (!declarator.init) continue;
+
+            const symbolNode =
+                declarator.init.type === "ArrowFunctionExpression" ||
+                    declarator.init.type === "FunctionExpression" ||
+                    declarator.init.type === "ClassExpression"
+                    ? declarator.init
+                    : declarator;
+
+            const symbol = this.findSymbolForNode(parsedFile, symbolNode);
+
+            if (!symbol) continue;
+
+            exportedSymbols.push({ exportedName: symbol.name, symbolId: symbol.id });
+        }
+
+        return exportedSymbols;
+    }
+
+    // helper function to get symbol for export specifier { foo }, { foo as bar }
+    private resolveNamedExportSpecifierSymbols(parsedFile: ParsedFile, path: NodePath<ExportNamedDeclaration>): ParsedExport[] {
+        const exportedSymbols: ParsedExport[] = [];
+
+        for (const specifier of path.node.specifiers) {
+            if (specifier.type !== "ExportSpecifier") continue;
+            if (specifier.local.type !== "Identifier" || specifier.exported.type !== "Identifier") continue;
+
+            const symbol = this.resolveExportSpecifierToSymbol(parsedFile, path, specifier.local.name);
+            if (!symbol) continue;
+
+            exportedSymbols.push({ exportedName: specifier.exported.name, symbolId: symbol.id });
+        }
+
+        return exportedSymbols;
+    }
+
+    // helper function to resolve export specifier to symbol from binding
+    private resolveExportSpecifierToSymbol(parsedFile: ParsedFile, path: NodePath<ExportNamedDeclaration>, localName: string): ParsedSymbol | undefined {
+        const binding = path.scope.getBinding(localName);
+
+        if (!binding) return;
+
+        return this.resolveBindingToSymbol(parsedFile, binding);
+    }
+
+    // Extract Named Export Symbols
+    private extractNamedExportSymbols(parsedFile: ParsedFile, path: NodePath<ExportNamedDeclaration>): ParsedExport[] {
+        const exportedSymbols: ParsedExport[] = [];
+
+        const declaration = path.node.declaration;
+
+        // For declared named-export
+        if (declaration) {
+            // For export function, class, interface, type, enum
+            const declarationSymbol = this.resolveNamedExportDeclarationSymbol(parsedFile, declaration);
+            if (declarationSymbol) exportedSymbols.push(declarationSymbol);
+
+            // For export variable declaration const, let, var, arrowFun, FunExp, ClassExp
+            exportedSymbols.push(...this.resolveNamedExportVariableSymbols(parsedFile, declaration));
+        }
+
+        // For specifiers like export { foo as bar }, export { foo }, export { * as bar }, export { }
+        exportedSymbols.push(...this.resolveNamedExportSpecifierSymbols(parsedFile, path));
+
+        return exportedSymbols;
+    }
+
+    /* ========================
+    * For Default Export
+    ======================== */
+
+    // helper function resolve declared default-export to symbol
+    private resolveDefaultExportDeclarationSymbol(parsedFile: ParsedFile, path: NodePath<ExportDefaultDeclaration>, declaration: Node): ParsedSymbol | undefined {
+        if (
+            declaration.type === "FunctionDeclaration" ||
+            declaration.type === "ClassDeclaration" ||
+            declaration.type === "TSInterfaceDeclaration" ||
+            declaration.type === "TSTypeAliasDeclaration" ||
+            declaration.type === "TSEnumDeclaration"
+        ) {
+            return this.findSymbolForNode(parsedFile, declaration);
+        }
+
+        if (declaration.type === "Identifier") {
+            return this.resolveDefaultExportIdentifier(parsedFile, path, declaration.name);
+        }
+
+        return undefined;
+    }
+
+    // helper function resolve default-export identifier to symbol
+    private resolveDefaultExportIdentifier(parsedFile: ParsedFile, path: NodePath<ExportDefaultDeclaration>, name: string): ParsedSymbol | undefined {
+        const binding = path.scope.getBinding(name);
+
+        if (binding) {
+            const symbol = this.resolveBindingToSymbol(parsedFile, binding);
+
+            if (symbol) return symbol;
+        }
+
+        return parsedFile.symbols.find(
+            symbol =>
+                symbol.name === name &&
+                (
+                    symbol.symbolKind === "interface" ||
+                    symbol.symbolKind === "typeAlias" ||
+                    symbol.symbolKind === "enum"
+                )
+        );
+    }
+
+    // extract default export symbol
+    private extractDefaultExportSymbol(parsedFile: ParsedFile, path: NodePath<ExportDefaultDeclaration>): ParsedExport | undefined {
+        const declaration = path.node.declaration;
+
+        const symbol = this.resolveDefaultExportDeclarationSymbol(parsedFile, path, declaration);
+
+        if (!symbol) return;
+        return { exportedName: "default", symbolId: symbol.id };
+    }
+
     // Stack to store active symbol containers while babel-traversing to get immediate parent
     private symbolStack: ParsedSymbol[] = [];
 
@@ -263,6 +464,8 @@ export class SymbolExtractor {
 
     extract(parsedFile: ParsedFile): void {
         this.symbolStack = [];
+        if (!parsedFile.exports) parsedFile.exports = [];
+        if (!parsedFile.symbols) parsedFile.symbols = [];
 
         traverse.default(parsedFile.ast, {
 
@@ -381,7 +584,7 @@ export class SymbolExtractor {
                     ) return;
 
                     const symbol = this.extractSymbol({ path, parsedFile, symbolKind: "objectProperty" });
-                    
+
                     if (symbol && path.node.value.type === "ObjectExpression") {
                         this.symbolStack.push(symbol);
                         path.setData("symbolPushed", true);
@@ -391,6 +594,21 @@ export class SymbolExtractor {
                     if (path.getData("symbolPushed")) {
                         this.symbolStack.pop();
                     }
+                }
+            },
+
+            // Handle Named-Exports for parsedFile.exports array
+            ExportNamedDeclaration: {
+                exit: (path: NodePath<ExportNamedDeclaration>) => {
+                    const exportedSymbols = this.extractNamedExportSymbols(parsedFile, path);
+                    parsedFile.exports.push(...exportedSymbols);
+                }
+            },
+
+            ExportDefaultDeclaration: {
+                exit: (path: NodePath<ExportDefaultDeclaration>) => {
+                    const exportedSymbol = this.extractDefaultExportSymbol(parsedFile, path);
+                    if (exportedSymbol) parsedFile.exports.push(exportedSymbol);
                 }
             }
         })
