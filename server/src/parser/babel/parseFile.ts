@@ -10,7 +10,7 @@ export function parseFile(filePath: string): ParsedFile {
 
         const ast = parse(code, parserOptions)
 
-        return { filePath, ast, symbols: []};
+        return { filePath, ast, symbols: [], exports: [] };
     } catch (err) {
         throw new FileParseError(filePath, err);
     }
