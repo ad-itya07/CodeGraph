@@ -69,8 +69,7 @@ export class Parser {
         // --- 5. Extracting relationships between symbols and files ---
         const relationshipExtractor = new RelationshipExtractor();
 
-        const relationships = relationshipExtractor.extract([parsedFiles[79], parsedFiles[80], parsedFiles[81]]);
-        // const relationships = relationshipExtractor.extract([parsedFiles[80]]);
+        const relationships = relationshipExtractor.extract(parsedFiles, metadata);
 
         // --- Returning the Parsed Repository ---
         return { repositoryPath, files: parsedFiles, metadata, failures: failedFiles, relationships };
