@@ -4,6 +4,9 @@ import { ParsedRelationship, RelationshipEntityKind, RelationshipKind } from "..
 import { ParsedSymbol } from "../models/ParsedSymbol.js";
 import { CallExpression, ClassDeclaration, ClassExpression, ImportDeclaration, NewExpression } from "@babel/types";
 import path from "node:path";
+import { RepositoryMetadata } from "../models/RepositoryMetadata.js";
+import { ParsedPackageJson } from "../models/ParsedPackageJson.js";
+import { ParsedPathConfig } from "../models/ParsedPathConfig.js";
 
 const SYMBOL_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -360,13 +363,138 @@ export class RelationshipExtractor {
     * IMPORTS Relationship
     ======================================================== */
 
+    /* ===========================
+    1. Import Classification Helpers
+    =========================== */
+
+    // checks whether the import uses a relative path
+    private isRelativeImport(importSource: string): boolean {
+        return importSource.startsWith(".");
+    }
+
+    // extracts the package name from an import source
+    // e.g. "lodash/debounce" -> "lodash"
+    //      "@babel/types" -> "@babel/types"
+    private getPackageRoot(importSource: string): string {
+        if (importSource.startsWith("@")) {
+            const parts = importSource.split("/");
+
+            return parts.slice(0, 2).join("/");
+        }
+
+        return importSource.split("/")[0];
+    }
+
+    /* ===========================
+    2. Repository metadata lookup
+    =========================== */
+
+    // finds the closest package.json applicable to the importing file
+    private findNearestPackageJson(filePath: string, metadata: RepositoryMetadata): ParsedPackageJson | undefined {
+        let currentDirectory = path.dirname(filePath);
+
+        while (true) {
+            const packageJson = metadata.packageJsons.find(
+                (packageJson) => path.dirname(packageJson.filePath) === currentDirectory
+            );
+
+            if (packageJson) return packageJson;
+
+            const parentDirectory = path.dirname(currentDirectory);
+            if (parentDirectory === currentDirectory) break;
+
+            currentDirectory = parentDirectory;
+        }
+
+        return undefined;
+    }
+
+    // finds the closest tsconfig.json/jsconfig.json applicable to the importing file
+    private findNearestPathConfig(filePath: string, metadata: RepositoryMetadata): ParsedPathConfig | undefined {
+        let currentDirectory = path.dirname(filePath);
+
+        while (true) {
+            const pathConfig = metadata.pathConfigs.find(
+                (pathConfig) =>
+                    path.dirname(pathConfig.filePath) === currentDirectory
+            );
+
+            if (pathConfig) return pathConfig;
+
+            const parentDirectory = path.dirname(currentDirectory);
+            if (parentDirectory === currentDirectory) break;
+
+            currentDirectory = parentDirectory;
+        }
+
+        return undefined;
+    }
+
+
+    /* ===========================
+    3. Import path resolutions
+    =========================== */
+
     // resolve import path to an absolute path
-    private resolveImportPath(parsedFile: ParsedFile, importSource: string): string | undefined {
+    private resolveRelativeImportPath(parsedFile: ParsedFile, importSource: string): string | undefined {
         if (!importSource.startsWith(".")) return undefined;
 
         const currentDirectory = path.dirname(parsedFile.filePath);
 
         return path.resolve(currentDirectory, importSource);
+    }
+
+    // resolves an import source using the path aliases from the applicable config
+    private resolvePathAlias(pathConfig: ParsedPathConfig, importSource: string): string | undefined {
+
+        for (const pathAlias of pathConfig.pathAliases) {
+            const alias = pathAlias.alias;
+
+            // Exact alias: "@"
+            if (!alias.includes("*")) {
+                if (importSource !== alias) continue;
+
+                for (const aliasPath of pathAlias.paths) {
+                    const baseDirectory = path.dirname(pathConfig.filePath);
+
+                    return path.resolve(
+                        baseDirectory,
+                        pathConfig.baseUrl ?? ".",
+                        aliasPath
+                    );
+                }
+
+                continue;
+            }
+
+            // Wildcard alias: "@/*"
+            const [prefix, suffix] = alias.split("*");
+
+            if (
+                !importSource.startsWith(prefix) ||
+                !importSource.endsWith(suffix)
+            ) {
+                continue;
+            }
+
+            const wildcardValue = importSource.slice(prefix.length, importSource.length - suffix.length);
+
+            for (const aliasPath of pathAlias.paths) {
+                const [pathPrefix, pathSuffix] = aliasPath.split("*");
+
+                const resolvedPath = `${pathPrefix}${wildcardValue}${pathSuffix}`;
+
+                const baseDirectory = path.dirname(pathConfig.filePath);
+
+                return path.resolve(
+                    baseDirectory,
+                    pathConfig.baseUrl ?? ".",
+                    resolvedPath
+                );
+            }
+        }
+
+        return undefined;
     }
 
     // finds the imported file among parsedFiles[]
@@ -377,6 +505,27 @@ export class RelationshipExtractor {
             return parsedFilePathWithoutExtension === resolvedImportPath;
         });
     }
+
+
+    /* ===========================
+    4. Dependency resolution
+    =========================== */
+
+    // checks whether an imported package is declared in dependencies or devDependencies
+    private isDeclaredDependency(packageName: string, packageJson: ParsedPackageJson): boolean {
+        return (
+            packageJson.dependencies.some(
+                (dependency) => dependency.name === packageName
+            ) ||
+            packageJson.devDependencies.some(
+                (dependency) => dependency.name === packageName
+            )
+        );
+    }
+
+    /* ===========================
+    5. Imported symbol resolution
+    =========================== */
 
     // helper function to get the Imported-Export-name based on the import-specifier or import-default-specifier
     // for former we have the specifier.imported.type = Identifier or string-literal
@@ -411,32 +560,77 @@ export class RelationshipExtractor {
         }
     }
 
-    // checks whether the module is external (like "react", "react-dom", etc.)
-    // TODO: right now anything starting with non-dot is considered as external like @components/button is also external
-    // so later we will make it specific to external-modules
-    private isExternalModule(importSource: string): boolean {
-        return !importSource.startsWith(".");
-    }
+    /* ===========================
+    6. Import case Handlers
+    =========================== */
 
-    // extracts import relationship
-    private extractImportRelationship(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[]) {
+    private handleRelativeImport(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[]): boolean {
         const importSource = path.node.source.value;
+        if (!this.isRelativeImport(importSource)) return false;
 
-        if (this.isExternalModule(importSource)) {
-            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importSource, targetKind: "module", relationshipKind: "imports" });
-            return;
-        }
-
-        const resolvedImportPath = this.resolveImportPath(parsedFile, importSource);
-        if (!resolvedImportPath) return;
+        const resolvedImportPath = this.resolveRelativeImportPath(parsedFile, importSource);
+        if (!resolvedImportPath) return true;
 
         const importedFile = this.findParsedFileByResolvedPath(resolvedImportPath, parsedFiles);
-        if (!importedFile) return;
+        if (!importedFile) return true;
 
-        // handling import specifiers here if any
         this.extractImportSpecifierRelationships(parsedFile, importedFile, path);
 
         this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports" });
+
+        return true;
+    }
+
+    private handlePathAliasImport(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[], metadata: RepositoryMetadata): boolean {
+        const nearestPathConfig = this.findNearestPathConfig(parsedFile.filePath, metadata);
+        if (!nearestPathConfig) return false;
+
+        const importSource = path.node.source.value;
+
+        const resolvedPath = this.resolvePathAlias(nearestPathConfig, importSource);
+        if (!resolvedPath) return false;
+
+        const importedFile = this.findParsedFileByResolvedPath(resolvedPath, parsedFiles);
+        if (!importedFile) return true;
+
+        this.extractImportSpecifierRelationships(parsedFile, importedFile, path);
+
+        this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importedFile.filePath, targetKind: "file", relationshipKind: "imports" });
+
+        return true;
+    }
+
+    private handleExternalImport(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, metadata: RepositoryMetadata): void {
+        const nearestPackageJson = this.findNearestPackageJson(parsedFile.filePath, metadata);
+        if (!nearestPackageJson) return;
+
+        const importSource = path.node.source.value;
+
+        const packageRoot = this.getPackageRoot(importSource);
+
+        if (this.isDeclaredDependency(packageRoot, nearestPackageJson)) {
+            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: packageRoot, targetKind: "dependency", relationshipKind: "imports" });
+            return;
+        }
+
+        this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: importSource, targetKind: "module", relationshipKind: "imports" });
+    }
+
+    /* ===========================
+    7. Main Imports Relationship extraction
+    =========================== */
+
+    // extracts import relationship
+    private extractImportRelationship(parsedFile: ParsedFile, path: NodePath<ImportDeclaration>, parsedFiles: ParsedFile[], metadata: RepositoryMetadata) {
+
+        // relative imports extraction
+        if (this.handleRelativeImport(parsedFile, path, parsedFiles)) return;
+
+        // path aliases import extraction
+        if (this.handlePathAliasImport(parsedFile, path, parsedFiles, metadata)) return;
+
+        // external imports extraction
+        this.handleExternalImport(parsedFile, path, metadata);
     }
 
     /* =======================================================
@@ -463,7 +657,7 @@ export class RelationshipExtractor {
     /* =======================================================
      * Main Extraction
      * ==================================================== */
-    extract(parsedFiles: ParsedFile[]): ParsedRelationship[] {
+    extract(parsedFiles: ParsedFile[], metadata: RepositoryMetadata): ParsedRelationship[] {
         this.parsedRelationships = [];
 
         for (const parsedFile of parsedFiles) {
@@ -504,7 +698,7 @@ export class RelationshipExtractor {
                 },
 
                 ImportDeclaration: (path) => {
-                    this.extractImportRelationship(parsedFile, path, parsedFiles);
+                    this.extractImportRelationship(parsedFile, path, parsedFiles, metadata);
                 }
             })
         }
