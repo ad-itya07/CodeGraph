@@ -7,6 +7,7 @@ import path from "node:path";
 import { RepositoryMetadata } from "../models/RepositoryMetadata.js";
 import { ParsedPackageJson } from "../models/ParsedPackageJson.js";
 import { ParsedPathConfig } from "../models/ParsedPathConfig.js";
+import { ParsedDependency } from "../models/ParsedDependency.js";
 
 const SYMBOL_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -512,12 +513,12 @@ export class RelationshipExtractor {
     =========================== */
 
     // checks whether an imported package is declared in dependencies or devDependencies
-    private isDeclaredDependency(packageName: string, packageJson: ParsedPackageJson): boolean {
+    private findDeclaredDependency(packageName: string, packageJson: ParsedPackageJson): ParsedDependency | undefined {
         return (
-            packageJson.dependencies.some(
+            packageJson.dependencies.find(
                 (dependency) => dependency.name === packageName
             ) ||
-            packageJson.devDependencies.some(
+            packageJson.devDependencies.find(
                 (dependency) => dependency.name === packageName
             )
         );
@@ -608,8 +609,10 @@ export class RelationshipExtractor {
 
         const packageRoot = this.getPackageRoot(importSource);
 
-        if (this.isDeclaredDependency(packageRoot, nearestPackageJson)) {
-            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: packageRoot, targetKind: "dependency", relationshipKind: "imports" });
+        const dependency = this.findDeclaredDependency(packageRoot, nearestPackageJson);
+
+        if (dependency) {
+            this.addRelationship({ sourceId: parsedFile.filePath, sourceKind: "file", targetId: dependency.id, targetKind: "dependency", relationshipKind: "imports" });
             return;
         }
 

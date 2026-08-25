@@ -8,17 +8,18 @@ export class PackageJsonExtractor {
 
         const packageJson = JSON.parse(content);
 
-        const dependencies = this.extractDependencies(packageJson.dependencies);
+        const dependencies = this.extractDependencies(packageJson.dependencies, filePath);
 
-        const devDependencies = this.extractDependencies(packageJson.devDependencies);
+        const devDependencies = this.extractDependencies(packageJson.devDependencies, filePath);
 
         return { filePath, name: packageJson.name, dependencies, devDependencies };
     }
 
-    private extractDependencies(dependencies?: Record<string, string>): ParsedDependency[] {
+    private extractDependencies(dependencies: Record<string, string> | undefined, packageJsonPath: string): ParsedDependency[] {
         if (!dependencies) return [];
 
         return Object.entries(dependencies).map(([name, version]) => ({
+            id: `dependency:${packageJsonPath}:${name}`,
             name,
             version
         }));
