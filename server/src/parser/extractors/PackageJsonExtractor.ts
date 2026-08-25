@@ -19,7 +19,7 @@ export class PackageJsonExtractor {
         if (!dependencies) return [];
 
         return Object.entries(dependencies).map(([name, version]) => ({
-            id: `dependency:${packageJsonPath}:${name}`,
+            id: `${packageJsonPath}:${name}`,
             name,
             version
         }));
