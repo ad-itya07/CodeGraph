@@ -121,9 +121,61 @@ export class RelationshipExtractor {
     private resolveBindingToSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
         const symbolNode = this.getSymbolNodeFromBinding(binding);
 
-        if (!symbolNode) return undefined;
+        if (symbolNode) return this.findSymbolForNode(parsedFile, symbolNode);
 
-        return this.findSymbolForNode(parsedFile, symbolNode);
+        return this.resolveImportedBindingToSymbol(parsedFile, binding);
+    }
+
+    // helper function to find imported symbol present in different file from import-specifier binding
+    private resolveImportedBindingToSymbol(parsedFile: ParsedFile, binding: Binding): ParsedSymbol | undefined {
+        const bindingNode = binding.path.node;
+
+        if (
+            bindingNode.type !== "ImportSpecifier" &&
+            bindingNode.type !== "ImportDefaultSpecifier"
+        ) return undefined;
+
+        const importDeclaration = binding.path.parentPath?.node;
+
+        if (importDeclaration?.type !== "ImportDeclaration") return undefined;
+
+        const importSource = importDeclaration.source.value;
+
+        let importedFile: ParsedFile | undefined;
+
+        // Relative import
+        const resolvedRelativePath = this.resolveRelativeImportPath(parsedFile, importSource);
+
+        if (resolvedRelativePath) {
+            importedFile = this.findParsedFileByResolvedPath(resolvedRelativePath, this.parsedFiles);
+        }
+
+        // Path alias import
+        if (!importedFile) {
+            const nearestPathConfig = this.findNearestPathConfig(parsedFile.filePath, this.metadata);
+
+            if (nearestPathConfig) {
+                const resolvedAliasPath = this.resolvePathAlias(nearestPathConfig, importSource);
+
+                if (resolvedAliasPath) importedFile = this.findParsedFileByResolvedPath(resolvedAliasPath, this.parsedFiles);
+            }
+        }
+
+        if (!importedFile) return undefined;
+
+        const importedName = this.resolveImportedExportName(bindingNode);
+
+        if (!importedName) return undefined;
+
+        const exportedSymbol = importedFile.exports.find(
+            exported => exported.exportedName === importedName
+        );
+
+        if (!exportedSymbol) return undefined;
+
+        return importedFile.symbols.find(
+            symbol => symbol.id === exportedSymbol.symbolId
+        );
     }
 
     /* =======================================================
@@ -656,12 +708,16 @@ export class RelationshipExtractor {
     ======================================================= */
     private symbolStack: ParsedSymbol[] = [];
     private parsedRelationships: ParsedRelationship[] = [];
+    private parsedFiles: ParsedFile[] = [];
+    private metadata!: RepositoryMetadata;
 
     /* =======================================================
      * Main Extraction
      * ==================================================== */
     extract(parsedFiles: ParsedFile[], metadata: RepositoryMetadata): ParsedRelationship[] {
         this.parsedRelationships = [];
+        this.parsedFiles = parsedFiles;
+        this.metadata = metadata;
 
         for (const parsedFile of parsedFiles) {
             this.extractExportRelationships(parsedFile);
