@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma.js";
 
 async function findRepository(url: string) {
   try {
-    return prisma.repository.findFirst({
+    return await prisma.repository.findFirst({
       where: { url },
     });
   } catch (err: any) {
@@ -13,7 +13,7 @@ async function findRepository(url: string) {
 
 async function findRepositoryById(id:string){
   try {
-    return prisma.repository.findFirst({
+    return await prisma.repository.findFirst({
       where: { id },
     });
   } catch (err: any) {
@@ -23,7 +23,7 @@ async function findRepositoryById(id:string){
 
 async function createRepository(url: string) {
   try {
-    return prisma.repository.create({
+    return await prisma.repository.create({
       data: { url, name: url.split("/")[url.split("/").length - 1] },
     });
   } catch (err: any) {
@@ -33,7 +33,7 @@ async function createRepository(url: string) {
 
 async function getAllRepositories() {
   try {
-    return prisma.repository.findMany();
+    return await prisma.repository.findMany();
   } catch (err: any) {
     throw new DatabaseError(err.message);
   }
