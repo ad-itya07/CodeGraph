@@ -13,14 +13,14 @@ ParsedRepository
                                             ▼
                                     AnalysisEngine
                                     ┌───────────────────────────────────────┐
-                                    │  GraphTraversal        (7.1)          │
-                                    │  ImpactAnalyzer        (7.2)          │
-                                    │  DependencyAnalyzer    (7.3)          │
-                                    │  CycleAnalyzer         (7.4)          │
-                                    │  DependencyOrderingAnalyzer  (7.5)    │
-                                    │  FanInOutAnalyzer      (7.6)          │
-                                    │  CallPathAnalyzer      (7.7)          │
-                                    │  DeadCodeDetector      (7.8)  ★       │
+                                    │  GraphTraversal        (8.1)          │
+                                    │  ImpactAnalyzer        (8.2)          │
+                                    │  DependencyAnalyzer    (8.3)          │
+                                    │  CycleAnalyzer         (8.4)          │
+                                    │  DependencyOrderingAnalyzer  (8.5)    │
+                                    │  FanInOutAnalyzer      (8.6)          │
+                                    │  CallPathAnalyzer      (8.7)          │
+                                    │  DeadCodeDetector      (8.8)  ★       │
                                     └───────────────────────────────────────┘
 ```
 
@@ -88,7 +88,7 @@ analyzeImpact(sourceNodeId: string, options?: ImpactAnalysisOptions): ImpactAnal
 
 Delegates to `ImpactAnalyzer.analyze(...)`. Traverses the graph **backward** (incoming edges) to find all nodes that would be affected if `sourceNodeId` were changed.
 
-→ See [7.2 Impact Analyzer](./7.2_Impact_Analyzer.md)
+→ See [7.2 Impact Analyzer](./8.2_Impact_Analyzer.md)
 
 ---
 
@@ -100,7 +100,7 @@ analyzeDependencies(sourceNodeId: string, options?: DependencyAnalysisOptions): 
 
 Delegates to `DependencyAnalyzer.analyze(...)`. Traverses the graph **forward** (outgoing edges) to find everything `sourceNodeId` depends on, directly or transitively.
 
-→ See [7.3 Dependency Analyzer](./7.3_Dependency_Analyzer.md)
+→ See [7.3 Dependency Analyzer](./8.3_Dependency_Analyzer.md)
 
 ---
 
@@ -112,7 +112,7 @@ analyzeCycles(options?: CycleAnalysisOptions): CycleAnalysisResult
 
 Delegates to `CycleAnalyzer.analyze(...)`. Runs Tarjan's SCC algorithm across the configured cycle type projections. No `sourceNodeId` — this is a **global** graph-wide analysis.
 
-→ See [7.4 Cycle Analyzer](./7.4_Cycle_Analyzer.md)
+→ See [7.4 Cycle Analyzer](./8.4_Cycle_Analyzer.md)
 
 ---
 
@@ -124,7 +124,7 @@ analyzeDependencyOrdering(sourceNodeId: string): DependencyOrderingResult
 
 Delegates to `DependencyOrderingAnalyzer.analyze(...)`. Collects the dependency subgraph of `sourceNodeId` and produces a topological ordering via Kahn's algorithm.
 
-→ See [7.5 Ordering Analyzer](./7.5_Ordering_Analyzer.md)
+→ See [7.5 Ordering Analyzer](./8.5_Ordering_Analyzer.md)
 
 ---
 
@@ -136,7 +136,7 @@ analyzeFanInOut(nodeId: string): FanInOutResult
 
 Delegates to `FanInOutAnalyzer.analyze(...)`. Returns the raw incoming and outgoing edge counts for a node in O(1) time.
 
-→ See [7.6 Connectivity Analyzer](./7.6_Connectivity_Analyzer.md)
+→ See [7.6 Connectivity Analyzer](./8.6_Connectivity_Analyzer.md)
 
 ---
 
@@ -148,7 +148,7 @@ analyzeCallPath(sourceNodeId: string, targetNodeId: string): CallPathResult
 
 Delegates to `CallPathAnalyzer.analyze(...)`. Runs a DFS over `"calls"` edges to find a call chain between two symbols, returning the path or `null` if none exists.
 
-→ See [7.7 Call Path Analyzer](./7.7_Call_Path_Analyzer.md)
+→ See [7.7 Call Path Analyzer](./8.7_Call_Path_Analyzer.md)
 
 ---
 
@@ -193,4 +193,4 @@ Graph
 
 ---
 
-*See sections 7.1 – 7.8 for detailed documentation on each individual analyzer.*
+*See sections 8.1 – 8.8 for detailed documentation on each individual analyzer.*
