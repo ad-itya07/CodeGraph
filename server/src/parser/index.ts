@@ -75,6 +75,3 @@ export class Parser {
         return { repositoryPath, files: parsedFiles, metadata, failures: failedFiles, relationships };
     }
 }
-
-const parser = new Parser();
-const result = await parser.parse(path.join(process.cwd(), "uploads", "demo"));
