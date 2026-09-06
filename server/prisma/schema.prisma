@@ -16,6 +16,7 @@ model Repository {
 
   url           String  
   name          String
+  commitSha     String?
 
   userId        String? // later we will be connecting it with USER
 
