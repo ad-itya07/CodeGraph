@@ -39,9 +39,21 @@ async function getAllRepositories() {
   }
 }
 
+async function updateRepositoryCommitSha(repositoryId: string, commitSha: string) {
+  try {
+    return await prisma.repository.update({
+      where: { id: repositoryId },
+      data: { commitSha },
+    });
+  } catch (err: any) {
+    throw new DatabaseError(err.message);
+  }
+}
+
 export {
   findRepository,
   createRepository,
   getAllRepositories,
   findRepositoryById,
+  updateRepositoryCommitSha,
 };
