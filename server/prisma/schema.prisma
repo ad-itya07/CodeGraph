@@ -21,10 +21,59 @@ model Repository {
   userId        String? // later we will be connecting it with USER
 
   jobs          ParsingJob[] @relation("RepositoryJobs")
+  graph         Graph? @relation("RepositoryGraph")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model Graph {
+  id           String     @id @default(cuid())
+
+  repositoryId String     @unique
+  repository   Repository @relation("RepositoryGraph", fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  nodes GraphNode[]
+  edges GraphEdge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GraphNode {
+  id      String @id
+  graphId String
+  kind    String
+  data    Json
+
+  graph Graph @relation(fields: [graphId], references: [id], onDelete: Cascade)
+
+  outgoingEdges GraphEdge[] @relation("GraphEdgeSource")
+  incomingEdges GraphEdge[] @relation("GraphEdgeTarget")
+
+  @@index([graphId])
+  @@index([graphId, kind])
+}
+
+model GraphEdge {
+  id               String @id
+  graphId          String
+
+  sourceId         String
+  targetId         String
+  relationshipKind String
+
+  graph   Graph     @relation(fields: [graphId], references: [id], onDelete: Cascade)
+
+  source  GraphNode @relation("GraphEdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+
+  target  GraphNode @relation("GraphEdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([graphId])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
 
 model ParsingJob {
   id            String   @id @default(cuid())
