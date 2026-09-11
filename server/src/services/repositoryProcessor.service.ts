@@ -6,6 +6,7 @@ import { updateRepositoryCommitSha } from "@/persistence/repository.js";
 import { cloneRepo } from "@/utils/git/cloneRepo.js";
 import { getCommitSha } from "@/utils/git/getCommitSha.js";
 import { GraphBuilder } from "@/graph/GraphBuilder.js";
+import RepositoryOverviewAnalyzer from "@/analytics/overview/RepositoryOverviewAnalyzer.js";
 
 class RepositoryProcessorService {
     async process(repositoryId: string, repositoryUrl: string) {
@@ -29,9 +30,12 @@ class RepositoryProcessorService {
             const graphBuilder = new GraphBuilder();
             const graph = graphBuilder.build(parsedRepository);
 
+            const overview = new RepositoryOverviewAnalyzer(graph).analyze();
+
             return {
                 parsedRepository,
                 graph,
+                overview,
             };
 
         } finally {

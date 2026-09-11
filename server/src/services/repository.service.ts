@@ -2,7 +2,7 @@ import { ConflictError } from "@/errors/ConfictError.js";
 import { NotFoundError } from "@/errors/NotFoundError.js";
 import { ValidationError } from "@/errors/ValidationError.js";
 import { createGraph } from "@/persistence/graph.js";
-import { createRepository, findRepository, findRepositoryById } from "@/persistence/repository.js";
+import { createRepository, findRepository, findRepositoryById, upsertRepositoryOverview } from "@/persistence/repository.js";
 import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
 
 class RepositoryService {
@@ -17,6 +17,7 @@ class RepositoryService {
     const result = await repositoryProcessorService.process(repository.id, repository.url);
 
     await createGraph(repository.id, result.graph);
+    await upsertRepositoryOverview(repository.id, result.overview);
 
     return {
       repository,
