@@ -1,7 +1,9 @@
 import { ConflictError } from "@/errors/ConfictError.js";
 import { NotFoundError } from "@/errors/NotFoundError.js";
 import { ValidationError } from "@/errors/ValidationError.js";
+import { createGraph } from "@/persistence/graph.js";
 import { createRepository, findRepository, findRepositoryById } from "@/persistence/repository.js";
+import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
 
 class RepositoryService {
   async createRepository(url: string) {
@@ -11,8 +13,14 @@ class RepositoryService {
 
     if (existingRepo) throw new ConflictError("Repository already exists");
 
-    const createRepo = await createRepository(url);
-    return createRepo;
+    const repository = await createRepository(url);
+    const result = await repositoryProcessorService.process(repository.id, repository.url);
+
+    await createGraph(repository.id, result.graph);
+
+    return {
+      repository,
+    };
   }
 
   async getRepository(id: string) {
