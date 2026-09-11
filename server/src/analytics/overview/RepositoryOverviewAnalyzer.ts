@@ -84,9 +84,17 @@ export class RepositoryOverviewAnalyzer {
 
             insights: {
                 mostConnectedFileId,
+                mostConnectedFileConnections,
+
                 mostConnectedSymbolId,
+                mostConnectedSymbolConnections,
+
                 highestFanInSymbolId,
+                highestFanIn,
+
                 highestFanOutSymbolId,
+                highestFanOut,
+
                 cycleCount,
             },
         };
