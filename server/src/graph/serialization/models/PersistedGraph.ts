@@ -4,7 +4,4 @@ import { GraphEdge } from "@/graph/models/GraphEdge.js";
 export interface PersistedGraph {
     nodes: GraphNode[];
     edges: GraphEdge[];
-
-    outgoingEdges: Record<string, string[]>;
-    incomingEdges: Record<string, string[]>;
 }

@@ -1,23 +1,12 @@
 import { Graph } from "@/graph/models/Graph.js";
-import { GraphNodeKind } from "@/graph/models/GraphNode.js";
+import { GraphEdge } from "@/graph/models/GraphEdge.js";
+import { GraphNode, GraphNodeKind } from "@/graph/models/GraphNode.js";
 import { PersistedGraph } from "./models/PersistedGraph.js";
 
 export function serializeGraph(graph: Graph): PersistedGraph {
     return {
         nodes: Array.from(graph.nodes.values()),
         edges: Array.from(graph.edges.values()),
-
-        outgoingEdges: Object.fromEntries(
-            Array.from(graph.outgoingEdges.entries()).map(
-                ([nodeId, edgeIds]) => [nodeId, Array.from(edgeIds)]
-            )
-        ),
-
-        incomingEdges: Object.fromEntries(
-            Array.from(graph.incomingEdges.entries()).map(
-                ([nodeId, edgeIds]) => [nodeId, Array.from(edgeIds)]
-            )
-        ),
     };
 }
 
@@ -30,18 +19,6 @@ export function deserializeGraph(data: PersistedGraph): Graph {
         data.edges.map((edge) => [edge.id, edge])
     );
 
-    const outgoingEdges = new Map<string, Set<string>>(
-        Object.entries(data.outgoingEdges).map(
-            ([nodeId, edgeIds]) => [nodeId, new Set(edgeIds)]
-        )
-    );
-
-    const incomingEdges = new Map<string, Set<string>>(
-        Object.entries(data.incomingEdges).map(
-            ([nodeId, edgeIds]) => [nodeId, new Set(edgeIds)]
-        )
-    );
-
     const nodesByKind = new Map<GraphNodeKind, Set<string>>();
 
     for (const node of data.nodes) {
@@ -50,6 +27,23 @@ export function deserializeGraph(data: PersistedGraph): Graph {
         }
 
         nodesByKind.get(node.kind)!.add(node.id);
+    }
+
+    const outgoingEdges = new Map<string, Set<string>>();
+    const incomingEdges = new Map<string, Set<string>>();
+
+    for (const edge of data.edges) {
+        if (!outgoingEdges.has(edge.sourceId)) {
+            outgoingEdges.set(edge.sourceId, new Set());
+        }
+
+        outgoingEdges.get(edge.sourceId)!.add(edge.id);
+
+        if (!incomingEdges.has(edge.targetId)) {
+            incomingEdges.set(edge.targetId, new Set());
+        }
+
+        incomingEdges.get(edge.targetId)!.add(edge.id);
     }
 
     return {
