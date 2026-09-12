@@ -1,7 +1,7 @@
 import { ConflictError } from "@/errors/ConfictError.js";
 import { NotFoundError } from "@/errors/NotFoundError.js";
 import { ValidationError } from "@/errors/ValidationError.js";
-import { createGraph } from "@/persistence/graph.js";
+import { createGraph, getGraph } from "@/persistence/graph.js";
 import { createRepository, findRepository, findRepositoryById, upsertRepositoryOverview } from "@/persistence/repository.js";
 import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
 
@@ -31,6 +31,12 @@ class RepositoryService {
 
     if (!repository) throw new NotFoundError("Repository not found");
     return repository;
+  }
+
+  async getRepositoryGraph(id: string) {
+    if (!id) throw new ValidationError("ID is required");
+
+    return await getGraph(id);
   }
 }
 

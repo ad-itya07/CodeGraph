@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import repositoryService from "../services/repository.service.js";
+import { serializeGraph } from "@/graph/serialization/graphSerializer.js";
 
 class RepositoryController {
     async createRepository(req: Request, res: Response, next: NextFunction) {
@@ -26,6 +27,21 @@ class RepositoryController {
                 success: true,
                 message: "Repository fetched successfully",
                 data: repository,
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    async getRepositoryGraph(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { id } = req.params;
+            const graph = await repositoryService.getRepositoryGraph(id as string);
+
+            return res.status(200).json({
+                success: true,
+                message: "Graph fetched successfully",
+                data: serializeGraph(graph),
             });
         } catch (err) {
             next(err);
