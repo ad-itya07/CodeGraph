@@ -8,4 +8,6 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || "*",
   isProduction: process.env.NODE_ENV === "production",
   isDevelopment: process.env.NODE_ENV === "development",
+  jwtSecret: process.env.JWT_SECRET || "codegraph-dev-secret-change-in-production",
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
 } as const;
