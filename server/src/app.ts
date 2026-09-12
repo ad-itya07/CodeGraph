@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { config } from "./config/env.js";
 import repositoryRoutes from "./routes/repository.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
 const app: Express = express();
@@ -41,6 +42,7 @@ app.get("/", (_req: Request, res: Response) => {
   });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/repository", repositoryRoutes);
 
 
