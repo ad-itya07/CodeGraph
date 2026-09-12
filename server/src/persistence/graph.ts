@@ -36,6 +36,9 @@ export async function createGraph(repositoryId: string, graph: Graph) {
             },
         });
     } catch (err: any) {
+        if (err instanceof GraphNotFoundError) {
+            throw err;
+        }
         throw new DatabaseError(err.message);
     }
 }
