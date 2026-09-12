@@ -11,6 +11,19 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id        String       @id @default(cuid())
+
+  name      String
+  email     String       @unique
+  password  String
+
+  repositories Repository[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Repository {
   id            String   @id @default(cuid())
 
@@ -18,7 +31,8 @@ model Repository {
   name          String
   commitSha     String?
 
-  userId        String? // later we will be connecting it with USER
+  userId        String?
+  user          User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobs          ParsingJob[] @relation("RepositoryJobs")
   graph         Graph? @relation("RepositoryGraph")
