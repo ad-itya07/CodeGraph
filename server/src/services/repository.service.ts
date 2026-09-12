@@ -2,18 +2,18 @@ import { ConflictError } from "@/errors/ConfictError.js";
 import { NotFoundError } from "@/errors/NotFoundError.js";
 import { ValidationError } from "@/errors/ValidationError.js";
 import { createGraph, getGraph } from "@/persistence/graph.js";
-import { createRepository, findRepository, findRepositoryById, upsertRepositoryOverview } from "@/persistence/repository.js";
+import { createRepository, findRepositoryByUrl, findRepositoryById, findRepositoriesByUserId, upsertRepositoryOverview } from "@/persistence/repository.js";
 import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
 
 class RepositoryService {
-  async createRepository(url: string) {
+  async createRepository(url: string, userId: string) {
     if (!url) throw new ValidationError("URL is required");
 
-    const existingRepo = await findRepository(url);
+    const existingRepo = await findRepositoryByUrl(url, userId);
 
     if (existingRepo) throw new ConflictError("Repository already exists");
 
-    const repository = await createRepository(url);
+    const repository = await createRepository(url, userId);
     const result = await repositoryProcessorService.process(repository.id, repository.url);
 
     await createGraph(repository.id, result.graph);
@@ -24,17 +24,24 @@ class RepositoryService {
     };
   }
 
-  async getRepository(id: string) {
+  async getUserRepositories(userId: string) {
+    return await findRepositoriesByUserId(userId);
+  }
+
+  async getRepository(id: string, userId: string) {
     if (!id) throw new ValidationError("ID is required");
 
-    const repository = await findRepositoryById(id);
+    const repository = await findRepositoryById(id, userId);
 
     if (!repository) throw new NotFoundError("Repository not found");
     return repository;
   }
 
-  async getRepositoryGraph(id: string) {
+  async getRepositoryGraph(id: string, userId: string) {
     if (!id) throw new ValidationError("ID is required");
+
+    const repository = await findRepositoryById(id, userId);
+    if (!repository) throw new NotFoundError("Repository not found");
 
     return await getGraph(id);
   }

@@ -3,20 +3,34 @@ import { DatabaseError } from "@/errors/DatabaseError.js";
 import prisma from "@/lib/prisma.js";
 import { Prisma } from "@prisma/client";
 
-async function findRepository(url: string) {
+async function findRepositoriesByUserId(userId: string) {
   try {
-    return await prisma.repository.findFirst({
-      where: { url },
+    return await prisma.repository.findMany({
+      where: { userId },
+      include: {
+        overview: true,
+      },
+      orderBy: { createdAt: "desc" },
     });
   } catch (err: any) {
     throw new DatabaseError(err.message);
   }
 }
 
-async function findRepositoryById(id: string) {
+async function findRepositoryByUrl(url: string, userId: string) {
   try {
     return await prisma.repository.findFirst({
-      where: { id },
+      where: { url, userId },
+    });
+  } catch (err: any) {
+    throw new DatabaseError(err.message);
+  }
+}
+
+async function findRepositoryById(id: string, userId: string) {
+  try {
+    return await prisma.repository.findFirst({
+      where: { id, userId },
       include: {
         overview: true,
       },
@@ -26,19 +40,15 @@ async function findRepositoryById(id: string) {
   }
 }
 
-async function createRepository(url: string) {
+async function createRepository(url: string, userId: string) {
   try {
     return await prisma.repository.create({
-      data: { url, name: url.split("/")[url.split("/").length - 1] },
+      data: {
+        url,
+        name: url.split("/")[url.split("/").length - 1],
+        userId,
+      },
     });
-  } catch (err: any) {
-    throw new DatabaseError(err.message);
-  }
-}
-
-async function getAllRepositories() {
-  try {
-    return await prisma.repository.findMany();
   } catch (err: any) {
     throw new DatabaseError(err.message);
   }
@@ -81,9 +91,9 @@ async function upsertRepositoryOverview(repositoryId: string, overview: Reposito
 }
 
 export {
-  findRepository,
+  findRepositoriesByUserId,
+  findRepositoryByUrl,
   createRepository,
-  getAllRepositories,
   findRepositoryById,
   updateRepositoryCommitSha,
   upsertRepositoryOverview,
