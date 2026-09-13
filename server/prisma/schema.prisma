@@ -71,7 +71,7 @@ model Graph {
 }
 
 model GraphNode {
-  id      String @id
+  id      String
   graphId String
   kind    String
   data    Json
@@ -81,12 +81,13 @@ model GraphNode {
   outgoingEdges GraphEdge[] @relation("GraphEdgeSource")
   incomingEdges GraphEdge[] @relation("GraphEdgeTarget")
 
+  @@id([graphId, id])
   @@index([graphId])
   @@index([graphId, kind])
 }
 
 model GraphEdge {
-  id               String @id
+  id               String
   graphId          String
 
   sourceId         String
@@ -95,10 +96,11 @@ model GraphEdge {
 
   graph   Graph     @relation(fields: [graphId], references: [id], onDelete: Cascade)
 
-  source  GraphNode @relation("GraphEdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  source GraphNode @relation("GraphEdgeSource", fields: [graphId, sourceId], references: [graphId, id], onDelete: Cascade)
 
-  target  GraphNode @relation("GraphEdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  target GraphNode @relation("GraphEdgeTarget", fields: [graphId, targetId], references: [graphId, id], onDelete: Cascade)
 
+  @@id([graphId, id])
   @@index([graphId])
   @@index([sourceId])
   @@index([targetId])
