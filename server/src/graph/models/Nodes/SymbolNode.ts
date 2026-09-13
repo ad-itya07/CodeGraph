@@ -1,4 +1,4 @@
-import { SymbolKind } from "@/parser/models/ParsedSymbol.js";
+import { MethodKind, SymbolKind, SymbolLocation } from "@/parser/models/ParsedSymbol.js";
 
 export interface SymbolNode {
     id: string;
@@ -8,4 +8,8 @@ export interface SymbolNode {
     symbolKind: SymbolKind;
 
     fileId: string;
+
+    methodKind?: MethodKind;
+    location: SymbolLocation;
+    parentSymbolId?: string;
 }

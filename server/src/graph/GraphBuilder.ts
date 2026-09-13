@@ -42,6 +42,10 @@ export class GraphBuilder {
                     name: symbol.name,
                     symbolKind: symbol.symbolKind,
                     fileId: getGraphNodeId("file", file.filePath),
+
+                    methodKind: symbol.methodKind,
+                    location: symbol.location,
+                    parentSymbolId: symbol.parentSymbolId,
                 };
 
                 this.addNode(graph, node);
