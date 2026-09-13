@@ -8,6 +8,7 @@ import { RepositoryMetadata } from "../models/RepositoryMetadata.js";
 import { ParsedPackageJson } from "../models/ParsedPackageJson.js";
 import { ParsedPathConfig } from "../models/ParsedPathConfig.js";
 import { ParsedDependency } from "../models/ParsedDependency.js";
+import { ALLOWED_EXTENSIONS } from "../walker/repositoryWalker.js";
 
 const SYMBOL_EXPRESSION_TYPES = new Set([
     "ArrowFunctionExpression",
@@ -552,11 +553,96 @@ export class RelationshipExtractor {
 
     // finds the imported file among parsedFiles[]
     private findParsedFileByResolvedPath(resolvedImportPath: string, parsedFiles: ParsedFile[]): ParsedFile | undefined {
-        return parsedFiles.find((parsedFile) => {
-            const parsedFilePathWithoutExtension = parsedFile.filePath.replace(/\.[^/.]+$/, "");
+        const extensions = [...ALLOWED_EXTENSIONS];
 
-            return parsedFilePathWithoutExtension === resolvedImportPath;
+        // 1. Exact path match.
+        const exactMatch = parsedFiles.find(
+            (parsedFile) => parsedFile.filePath === resolvedImportPath
+        );
+
+        if (exactMatch) return exactMatch;
+
+        // 2. Check whether the import explicitly specifies a supported source extension.
+        const importExtension = path.extname(resolvedImportPath);
+        const hasExplicitExtension = extensions.includes(importExtension);
+
+        // 3. Explicit extension:
+        //    allow a compatible source extension only when there is exactly one matching file.
+        if (hasExplicitExtension) {
+            const importPathWithoutExtension =
+                resolvedImportPath.slice(
+                    0,
+                    -importExtension.length
+                );
+
+            const compatibleMatches = parsedFiles.filter((parsedFile) => {
+                const parsedExtension = path.extname(parsedFile.filePath);
+
+                if (!extensions.includes(parsedExtension)) {
+                    return false;
+                }
+
+                const parsedPathWithoutExtension =
+                    parsedFile.filePath.slice(
+                        0,
+                        -parsedExtension.length
+                    );
+
+                return parsedPathWithoutExtension === importPathWithoutExtension;
+            });
+
+            if (compatibleMatches.length === 1) {
+                return compatibleMatches[0];
+            }
+
+            return undefined;
+        }
+
+        // 4. Extensionless file import:
+        //    ./foo -> foo.js / foo.jsx / foo.ts / foo.tsx
+        const fileMatches = parsedFiles.filter((parsedFile) => {
+            const parsedExtension = path.extname(parsedFile.filePath);
+
+            if (!extensions.includes(parsedExtension)) {
+                return false;
+            }
+
+            const parsedPathWithoutExtension =
+                parsedFile.filePath.slice(
+                    0,
+                    -parsedExtension.length
+                );
+
+            return parsedPathWithoutExtension === resolvedImportPath;
         });
+
+        if (fileMatches.length === 1) {
+            return fileMatches[0];
+        }
+
+        // 5. Directory import:
+        //    ./utils -> ./utils/index.*
+        const indexMatches = parsedFiles.filter((parsedFile) => {
+            const parsedExtension = path.extname(parsedFile.filePath);
+
+            if (!extensions.includes(parsedExtension)) {
+                return false;
+            }
+
+            const parsedDirectory = path.dirname(parsedFile.filePath);
+            const parsedFileName = path.basename(parsedFile.filePath);
+
+            return (
+                parsedDirectory === resolvedImportPath &&
+                parsedFileName === `index${parsedExtension}`
+            );
+        });
+
+        if (indexMatches.length === 1) {
+            return indexMatches[0];
+        }
+
+        return undefined;
     }
 
 

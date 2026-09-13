@@ -130,7 +130,7 @@ The import handler `extractImportRelationship()` attempts 3 resolution strategie
 Triggered when the import source starts with `.` (e.g., `import { foo } from "./utils"`).
 
 1. `resolveRelativeImportPath()` uses `path.resolve()` to convert the relative path to an absolute path based on the importing file's directory.
-2. `findParsedFileByResolvedPath()` searches the `parsedFiles` array by comparing the resolved path against each file's path **with the extension stripped** (using regex `replace(/\.[^/.]+$/, "")`). This handles extensionless imports like `./utils` matching `./utils.ts`.
+2. `findParsedFileByResolvedPath()` locates the actual file on disk. See [§ `findParsedFileByResolvedPath` Resolution Algorithm](#findparsedfilebyresolvedpath-resolution-algorithm) below for the full lookup waterfall.
 3. If found, creates a file-to-file relationship AND processes each import specifier:
    - `extractImportSpecifierRelationships()` iterates over `path.node.specifiers`.
    - `resolveImportedExportName()` maps each specifier to its exported name:
@@ -168,6 +168,109 @@ Triggered as the final fallback for non-relative, non-aliased imports (e.g., `im
 
 ---
 
+## `findParsedFileByResolvedPath` Resolution Algorithm
+
+This private method is the single lookup function used by **both** `handleRelativeImport` and `handlePathAliasImport` to match a resolved absolute import path against the in-memory `parsedFiles[]` array. It runs the following steps in order and returns on the first successful match.
+
+The set of valid extensions is `ALLOWED_EXTENSIONS = { .ts, .tsx, .js, .jsx }` (imported from `repositoryWalker`).
+
+### Step 1 — Exact match
+
+```
+parsedFile.filePath === resolvedImportPath
+```
+
+The resolved path is compared verbatim against every file path. This handles imports that already include the exact extension, for example:
+
+```ts
+import { foo } from "./utils/index.ts"   // resolves to /abs/utils/index.ts
+```
+
+If an exact match is found it is returned immediately; the remaining steps are skipped.
+
+### Step 2 — Check whether the import carries an explicit source extension
+
+`path.extname(resolvedImportPath)` is used to detect whether the resolved path ends with a known source extension (one that is in `ALLOWED_EXTENSIONS`). This determines which of the two next branches is taken.
+
+### Step 3 — Explicit-extension compatible match (single file only)
+
+_Applies when the import already has an explicit source extension (e.g., the developer wrote `"./file.js"` or `"./file.ts"`)._
+
+Both the resolved import path and each candidate's file path are stripped of their respective extensions and compared as base paths:
+
+```
+resolvedImportPath.slice(0, -importExtension.length) === parsedFile.filePath.slice(0, -parsedExtension.length)
+```
+
+This allows matching across **compatible extension variants** of the same base name:
+
+| Written import | Actual file | Outcome |
+|---|---|---|
+| `"./file.js"` | `file.ts` | ✅ match (same base `./file`) |
+| `"./file.ts"` | `file.tsx` | ✅ match (same base `./file`) |
+| `"./file.js"` | `file.jsx` | ✅ match (same base `./file`) |
+
+> **Ambiguity guard**: If more than one file shares the same base name (e.g., both `file.js` and `file.ts` exist), the step returns `undefined` — no relationship is emitted rather than a wrong one.
+
+### Step 4 — Extensionless file match
+
+_Applies when the import has **no** source extension (e.g., the developer wrote `"./utils"` or `"./file"`)._
+
+Each candidate's extension is stripped and compared:
+
+```
+parsedFile.filePath.slice(0, -parsedExtension.length) === resolvedImportPath
+```
+
+This resolves the common JS/TS pattern of omitting the extension entirely:
+
+```ts
+import { foo } from "./utils"  // matches ./utils.ts, ./utils.js, ./utils.tsx, etc.
+```
+
+Again, if more than one file matches (e.g., both `utils.js` and `utils.ts` exist side-by-side) the step returns `undefined`.
+
+### Step 5 — Directory / index file match
+
+_Applies when Steps 1–4 have all failed._
+
+The resolved import path is treated as a **directory** and compared against the parent directory of every candidate file, while also verifying that the filename is an `index` file:
+
+```
+path.dirname(parsedFile.filePath) === resolvedImportPath
+  && path.basename(parsedFile.filePath) === `index${parsedExtension}`
+```
+
+This handles the Node.js/bundler convention where importing a directory resolves to its `index` file:
+
+```ts
+import { foo } from "./utils"        // resolves to ./utils/index.ts
+import { bar } from "./components"   // resolves to ./components/index.jsx
+```
+
+If more than one `index` file matches (highly unlikely but possible in a mixed-extension repo), `undefined` is returned.
+
+### Resolution waterfall summary
+
+```
+resolvedImportPath
+  │
+  ├─[1]─ Exact match?                  → return file
+  │
+  ├─[2]─ Has explicit source ext?      ─┐
+  │       YES                           ├─[3]─ Single base-name match?  → return file
+  │                                     │      Multiple matches?         → return undefined
+  │       NO                            ┘
+  │
+  ├─[4]─ Single extensionless match?   → return file
+  │       Multiple matches?             → return undefined
+  │
+  └─[5]─ Single index-file match?      → return file
+          Multiple / none?              → return undefined
+```
+
+---
+
 ## The Main Traversal
 
 The `extract()` method loops over all parsed files. For each file:
@@ -196,4 +299,5 @@ The `extract()` method loops over all parsed files. For each file:
 - **Static scope resolution only**: We rely on Babel's static scope bindings. This means `const X = new SomeClass(); X.sumIt()` is resolved correctly. But if an object is received as a function parameter (`function run(X) { X.sumIt() }`), Babel has no binding pointing `X` back to a class — the call is silently skipped. Resolving this would require integrating a full TypeScript type-checker, which is a fundamentally different level of complexity.
 - **Name-based matching for `implements`**: Since TypeScript interfaces don't create runtime bindings visible to Babel's scope tracker, `resolveImplementedSymbol()` uses a simple name search instead of binding resolution. This works in most cases but could produce false matches if two different interfaces share the same name in the same file.
 - **`NewExpression` source limitations**: Instantiation is only tracked when the `new` expression is assigned to a variable or directly returned. Passing a `new` expression as a function argument (`doSomething(new Foo())`) is not captured because there's no clear "source symbol" to attribute it to.
-- **Extension-stripped matching for imports**: `findParsedFileByResolvedPath` strips extensions before comparing, so `import "./utils"` matches `./utils.ts`. However, if two files share the same name with different extensions (e.g., `utils.ts` and `utils.js`), only the first match is returned.
+- **Ambiguous extension collisions**: The multi-step resolution in `findParsedFileByResolvedPath` returns `undefined` (and emits no relationship) whenever more than one file matches the same base name or the same directory index. This is a conservative choice — it avoids wrong edges at the cost of missing edges in the rare case where a repo deliberately has, for example, both `utils.js` and `utils.ts` at the same path.
+- **Exact-match priority**: The exact-path check in Step 1 is intentional — it lets an import like `"./file.js"` resolve to an actual `file.js` on disk before falling through to the extension-compatibility logic. This is important for repos that ship both compiled `.js` files and their `.ts` sources side by side.

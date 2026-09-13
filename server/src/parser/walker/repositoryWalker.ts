@@ -4,7 +4,7 @@ import path from 'path';
 import { RepositoryFiles } from '../models/RepositoryFiles.js';
 
 // Supported file extensions
-const ALLOWED_EXTENSIONS = new Set(['.tsx', '.ts', '.js', '.jsx']);
+export const ALLOWED_EXTENSIONS = new Set(['.tsx', '.ts', '.js', '.jsx']);
 
 // Directories to ignore during traversal
 const IGNORED_DIRS = new Set([
