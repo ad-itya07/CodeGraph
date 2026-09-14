@@ -18,6 +18,8 @@ import { RepositoryMetadata } from "./models/RepositoryMetadata.js";
 */
 export class Parser {
     async parse(repositoryPath: string): Promise<ParsedRepository> {
+        repositoryPath = path.resolve(repositoryPath);
+
         // --- 1. Getting repository files ---
         const repositoryFiles = getRepositoryFiles(repositoryPath);
 

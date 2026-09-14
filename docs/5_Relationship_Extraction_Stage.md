@@ -172,6 +172,8 @@ Triggered as the final fallback for non-relative, non-aliased imports (e.g., `im
 
 This private method is the single lookup function used by **both** `handleRelativeImport` and `handlePathAliasImport` to match a resolved absolute import path against the in-memory `parsedFiles[]` array. It runs the following steps in order and returns on the first successful match.
 
+> **Note**: This function compares `resolvedImportPath` (produced by `path.resolve()`) against `parsedFile.filePath` (produced by the walker). For the comparison to work, both paths must be in the same form — either both absolute or both relative. The `Parser` guarantees this by normalising `repositoryPath` to an absolute path via `path.resolve()` before passing it to the walker (see `1_Parser_Stage.md`, Step 0).
+
 The set of valid extensions is `ALLOWED_EXTENSIONS = { .ts, .tsx, .js, .jsx }` (imported from `repositoryWalker`).
 
 ### Step 1 — Exact match

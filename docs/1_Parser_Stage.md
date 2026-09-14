@@ -4,7 +4,7 @@
 
 The `Parser` class is the top-level orchestrator of the entire CodeGraph extraction pipeline. It takes a raw repository directory path and coordinates a strict, sequential pipeline that transforms source files into a structured graph of symbols and relationships.
 
-**Input**: A `repositoryPath` string (absolute path to the repo root).  
+**Input**: A `repositoryPath` string (path to the repo root — can be relative or absolute).  
 **Output**: A `ParsedRepository` object containing all parsed files, symbols, relationships, metadata, and any failures.
 
 ---
@@ -12,6 +12,14 @@ The `Parser` class is the top-level orchestrator of the entire CodeGraph extract
 ## The Pipeline (5 Steps)
 
 The pipeline is sequential — each step depends on data produced by the previous one.
+
+### Step 0 — Path Normalisation
+
+```ts
+repositoryPath = path.resolve(repositoryPath);
+```
+
+The very first thing `parse()` does is normalise the incoming `repositoryPath` to an absolute path using `path.resolve()`. This is critical because the Relationship Extraction stage (Stage 5) uses `path.resolve()` internally to resolve relative import paths — if the walker produces relative file paths, the resolved import paths will be absolute and the two will never match, silently breaking all cross-file relationships. By normalising here, the walker produces absolute file paths, which are then directly comparable to resolved import paths.
 
 ### Step 1 — Repository Walking
 
