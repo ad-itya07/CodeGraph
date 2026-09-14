@@ -7,9 +7,6 @@ async function findRepositoriesByUserId(userId: string) {
   try {
     return await prisma.repository.findMany({
       where: { userId },
-      include: {
-        overview: true,
-      },
       orderBy: { createdAt: "desc" },
     });
   } catch (err: any) {
