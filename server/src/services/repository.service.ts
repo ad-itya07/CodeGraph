@@ -4,6 +4,7 @@ import { ValidationError } from "@/errors/ValidationError.js";
 import { createGraph, getGraph } from "@/persistence/graph.js";
 import { createRepository, findRepositoryByUrl, findRepositoryById, findRepositoriesByUserId, upsertRepositoryOverview } from "@/persistence/repository.js";
 import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
+import cacheService from "./cache.service.js";
 
 class RepositoryService {
   async createRepository(url: string, userId: string) {
@@ -31,9 +32,24 @@ class RepositoryService {
   async getRepository(id: string, userId: string) {
     if (!id) throw new ValidationError("ID is required");
 
+    const cacheKey = `repository:${userId}:${id}`;
+
+    const cachedRepository = await cacheService.get(cacheKey);
+
+    if (cachedRepository) {
+      return JSON.parse(cachedRepository);
+    }
+
     const repository = await findRepositoryById(id, userId);
 
     if (!repository) throw new NotFoundError("Repository not found");
+
+    await cacheService.set(
+      cacheKey,
+      JSON.stringify(repository),
+      7 * 24 * 60 * 60
+    );
+
     return repository;
   }
 

@@ -6,6 +6,7 @@ import { AnalysisEngine } from "@/analytics/AnalysisEngine.js";
 import { ImpactAnalysisOptions } from "@/analytics/impact/models/ImpactAnalysisOptions.js";
 import { DependencyAnalysisOptions } from "@/analytics/dependency/models/DependencyAnalysisOptions.js";
 import { CycleAnalysisOptions } from "@/analytics/cycles/models/CycleAnalysisOptions.js";
+import cacheService from "./cache.service.js";
 
 
 interface AnalyzeImpactParams {
@@ -51,6 +52,14 @@ class AnalyticsService {
             throw new ValidationError("Source node ID is required");
         }
 
+        const maxDepth = options?.maxDepth ?? "default";
+
+        const cacheKey = `analysis:impact:${repositoryId}:${sourceNodeId}:${maxDepth}`;
+        const cachedResult = await cacheService.get(cacheKey);
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
+        }
+
         const repository = await findRepositoryById(repositoryId, userId);
 
         if (!repository) {
@@ -63,11 +72,19 @@ class AnalyticsService {
 
         const result = analysisEngine.analyzeImpact(sourceNodeId, options);
 
-        return {
+        const response = {
             sourceNodeId: result.sourceNodeId,
             impactedNodeIds: result.impactedNodeIds,
             depthByNode: Object.fromEntries(result.depthByNode),
         };
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(response),
+            12 * 60 * 60
+        );
+
+        return response;
     }
 
     async analyzeDependencies({ repositoryId, userId, sourceNodeId, options }: AnalyzeDependenciesParams) {
@@ -77,6 +94,16 @@ class AnalyticsService {
 
         if (!sourceNodeId) {
             throw new ValidationError("Source node ID is required");
+        }
+
+        const maxDepth = options?.maxDepth ?? "default";
+
+        const cacheKey = `analysis:dependencies:${repositoryId}:${sourceNodeId}:${maxDepth}`;
+
+        const cachedResult = await cacheService.get(cacheKey);
+
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
         }
 
         const repository = await findRepositoryById(repositoryId, userId);
@@ -91,11 +118,19 @@ class AnalyticsService {
 
         const result = analysisEngine.analyzeDependencies(sourceNodeId, options);
 
-        return {
+        const response = {
             sourceNodeId: result.sourceNodeId,
             dependencyNodeIds: result.dependencyNodeIds,
             depthByNode: Object.fromEntries(result.depthByNode),
         };
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(response),
+            12 * 60 * 60
+        );
+
+        return response;
     }
 
     async analyzeCallPath({ repositoryId, userId, sourceNodeId, targetNodeId }: AnalyzeCallPathParams) {
@@ -111,6 +146,14 @@ class AnalyticsService {
             throw new ValidationError("Target node ID is required");
         }
 
+        const cacheKey = `analysis:paths:${repositoryId}:${sourceNodeId}:${targetNodeId}`;
+
+        const cachedResult = await cacheService.get(cacheKey);
+
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
+        }
+
         const repository = await findRepositoryById(repositoryId, userId);
 
         if (!repository) {
@@ -121,7 +164,15 @@ class AnalyticsService {
 
         const analysisEngine = new AnalysisEngine(graph);
 
-        return analysisEngine.analyzeCallPath(sourceNodeId, targetNodeId);
+        const result = analysisEngine.analyzeCallPath(sourceNodeId, targetNodeId);
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(result),
+            12 * 60 * 60
+        );
+
+        return result;
     }
 
     async analyzeCycles({ repositoryId, userId, options }: AnalyzeCyclesParams) {
@@ -129,6 +180,14 @@ class AnalyticsService {
             throw new ValidationError("Repository ID is required");
         }
 
+        const cacheKey = `analysis:cycles:${repositoryId}`;
+
+        const cachedResult = await cacheService.get(cacheKey);
+
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
+        }
+
         const repository = await findRepositoryById(repositoryId, userId);
 
         if (!repository) {
@@ -139,7 +198,15 @@ class AnalyticsService {
 
         const analysisEngine = new AnalysisEngine(graph);
 
-        return analysisEngine.analyzeCycles(options);
+        const result = analysisEngine.analyzeCycles(options);
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(result),
+            12 * 60 * 60
+        );
+
+        return result;
     }
 
     async analyzeDependencyOrdering({ repositoryId, userId, sourceNodeId }: AnalyzeDependencyOrderingParams) {
@@ -151,6 +218,14 @@ class AnalyticsService {
             throw new ValidationError("Source node ID is required");
         }
 
+        const cacheKey = `analysis:ordering:${repositoryId}:${sourceNodeId}`;
+
+        const cachedResult = await cacheService.get(cacheKey);
+
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
+        }
+
         const repository = await findRepositoryById(repositoryId, userId);
 
         if (!repository) {
@@ -161,7 +236,15 @@ class AnalyticsService {
 
         const analysisEngine = new AnalysisEngine(graph);
 
-        return analysisEngine.analyzeDependencyOrdering(sourceNodeId);
+        const result = analysisEngine.analyzeDependencyOrdering(sourceNodeId);
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(result),
+            12 * 60 * 60
+        );
+
+        return result;
     }
 }
 
