@@ -24,7 +24,8 @@
     "jsonc-parser": "^3.3.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0",
-    "prisma": "^7.9.0"
+    "prisma": "^7.9.0",
+    "redis": "^6.2.1"
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
