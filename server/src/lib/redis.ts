@@ -3,6 +3,7 @@ import { config } from "@/config/env.js";
 
 const redis = createClient({
     url: config.redisUrl,
+    disableOfflineQueue: true,
 
     socket: {
         reconnectStrategy: (retries) => {
