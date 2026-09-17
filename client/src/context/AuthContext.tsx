@@ -3,8 +3,8 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useState,
+  useEffect,
   useCallback,
 } from "react";
 import type { User } from "@/types";
@@ -20,44 +20,53 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [auth, setAuth] = useState<{ user: User | null; token: string | null }>({
+    user: null,
+    token: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Rehydrate from localStorage on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem("cg_token");
-    const storedUser = localStorage.getItem("cg_user");
+    try {
+      const storedToken = localStorage.getItem("cg_token");
+      const storedUser = localStorage.getItem("cg_user");
 
-    if (storedToken && storedUser) {
-      try {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem("cg_token");
-        localStorage.removeItem("cg_user");
+      if (storedToken && storedUser) {
+        setAuth({
+          token: storedToken,
+          user: JSON.parse(storedUser),
+        });
       }
+    } catch {
+      localStorage.removeItem("cg_token");
+      localStorage.removeItem("cg_user");
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   }, []);
 
   const login = useCallback((user: User, token: string) => {
     localStorage.setItem("cg_token", token);
     localStorage.setItem("cg_user", JSON.stringify(user));
-    setUser(user);
-    setToken(token);
+    setAuth({ user, token });
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem("cg_token");
     localStorage.removeItem("cg_user");
-    setUser(null);
-    setToken(null);
+    setAuth({ user: null, token: null });
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user: auth.user,
+        token: auth.token,
+        isLoading,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
