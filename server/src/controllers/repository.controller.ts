@@ -61,6 +61,20 @@ class RepositoryController {
             next(err);
         }
     }
+
+    async getUserOverview(req: Request, res: Response, next: NextFunction) {
+        try {
+            const overview = await repositoryService.getUserOverview(req.userId!);
+
+            return res.status(200).json({
+                success: true,
+                message: "User overview fetched successfully",
+                data: overview,
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
 }
 
 export default new RepositoryController();

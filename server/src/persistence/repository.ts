@@ -14,6 +14,19 @@ async function findRepositoriesByUserId(userId: string) {
   }
 }
 
+async function findRepositoryOverviewsByUserId(userId: string) {
+  try {
+    return await prisma.repositoryOverview.findMany({
+      where: {
+        repository: {
+          userId,
+        }
+      }
+    });
+  } catch (err: any) {
+    throw new DatabaseError(err.message);
+  }
+}
 async function findRepositoryByUrl(url: string, userId: string) {
   try {
     return await prisma.repository.findFirst({
@@ -89,6 +102,7 @@ async function upsertRepositoryOverview(repositoryId: string, overview: Reposito
 
 export {
   findRepositoriesByUserId,
+  findRepositoryOverviewsByUserId,
   findRepositoryByUrl,
   createRepository,
   findRepositoryById,

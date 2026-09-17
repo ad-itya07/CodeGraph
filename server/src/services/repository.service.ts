@@ -2,7 +2,7 @@ import { ConflictError } from "@/errors/ConfictError.js";
 import { NotFoundError } from "@/errors/NotFoundError.js";
 import { ValidationError } from "@/errors/ValidationError.js";
 import { createGraph, getGraph } from "@/persistence/graph.js";
-import { createRepository, findRepositoryByUrl, findRepositoryById, findRepositoriesByUserId, upsertRepositoryOverview } from "@/persistence/repository.js";
+import { createRepository, findRepositoryByUrl, findRepositoryById, findRepositoriesByUserId, upsertRepositoryOverview, findRepositoryOverviewsByUserId } from "@/persistence/repository.js";
 import repositoryProcessorService from "@/services/repositoryProcessor.service.js";
 import cacheService from "./cache.service.js";
 
@@ -60,6 +60,40 @@ class RepositoryService {
     if (!repository) throw new NotFoundError("Repository not found");
 
     return await getGraph(id);
+  }
+
+  async getUserOverview(userId: string) {
+    const overviews = await findRepositoryOverviewsByUserId(userId);
+    const repositories = await findRepositoriesByUserId(userId);
+
+    let totalCodeEntities = 0;
+    let totalRelationships = 0;
+    let totalHealthScore = 0;
+
+    for (const overview of overviews) {
+      const stats = overview.statistics as any;
+      const health = overview.health as any;
+
+      if (stats) {
+        totalCodeEntities += (stats.symbolCount || 0);
+        totalRelationships += (stats.relationshipCount || 0);
+      }
+      if (health && typeof health.index === "number") {
+        totalHealthScore += health.index;
+      }
+    }
+
+    const repositoryCount = repositories.length;
+    const averageHealthIndex = overviews.length > 0 
+      ? Math.round(totalHealthScore / overviews.length) 
+      : 0;
+
+    return {
+      repositoryCount,
+      totalCodeEntities,
+      totalRelationships,
+      averageHealthIndex
+    };
   }
 }
 
