@@ -18,7 +18,7 @@ export function RepositoryCard({ repository }: RepositoryCardProps) {
 
   return (
     <Link
-      href={`/dashboard/repository/${repository.id}`}
+      href={`/repository/${repository.id}/overview`}
       className="group flex flex-col p-5 bg-surface border border-border rounded-xl hover:border-accent/40 hover:bg-surface-elevated/30 transition-all focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
     >
       <div className="flex items-start gap-3 mb-3">
