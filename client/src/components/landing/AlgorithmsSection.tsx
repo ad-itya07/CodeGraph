@@ -49,7 +49,7 @@ export default function AlgorithmsSection() {
           <h2 className="text-4xl lg:text-5xl font-bold font-heading text-foreground mb-4">
             Built on{" "}
             <span className="text-transparent bg-clip-text"
-              style={{ backgroundImage: "linear-gradient(135deg, #06b6d4, #22d3ee)" }}>
+              style={{ backgroundImage: "linear-gradient(135deg, var(--accent), var(--accent-light))" }}>
               computer science
             </span>
             , not guesswork

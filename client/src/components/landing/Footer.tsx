@@ -26,15 +26,15 @@ export default function Footer() {
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <circle cx="8"  cy="8"  r="2"   fill="#06b6d4" />
-                <circle cx="2"  cy="3"  r="1.5" fill="#22d3ee" opacity="0.7" />
-                <circle cx="14" cy="3"  r="1.5" fill="#22d3ee" opacity="0.7" />
-                <circle cx="2"  cy="13" r="1.5" fill="#22d3ee" opacity="0.7" />
-                <circle cx="14" cy="13" r="1.5" fill="#22d3ee" opacity="0.7" />
-                <line x1="8" y1="8" x2="2"  y2="3"  stroke="#06b6d4" strokeWidth="0.8" opacity="0.5" />
-                <line x1="8" y1="8" x2="14" y2="3"  stroke="#06b6d4" strokeWidth="0.8" opacity="0.5" />
-                <line x1="8" y1="8" x2="2"  y2="13" stroke="#06b6d4" strokeWidth="0.8" opacity="0.5" />
-                <line x1="8" y1="8" x2="14" y2="13" stroke="#06b6d4" strokeWidth="0.8" opacity="0.5" />
+                <circle cx="8"  cy="8"  r="2"   fill="var(--accent)" />
+                <circle cx="2"  cy="3"  r="1.5" fill="var(--accent-light)" opacity="0.7" />
+                <circle cx="14" cy="3"  r="1.5" fill="var(--accent-light)" opacity="0.7" />
+                <circle cx="2"  cy="13" r="1.5" fill="var(--accent-light)" opacity="0.7" />
+                <circle cx="14" cy="13" r="1.5" fill="var(--accent-light)" opacity="0.7" />
+                <line x1="8" y1="8" x2="2"  y2="3"  stroke="var(--accent)" strokeWidth="0.8" opacity="0.5" />
+                <line x1="8" y1="8" x2="14" y2="3"  stroke="var(--accent)" strokeWidth="0.8" opacity="0.5" />
+                <line x1="8" y1="8" x2="2"  y2="13" stroke="var(--accent)" strokeWidth="0.8" opacity="0.5" />
+                <line x1="8" y1="8" x2="14" y2="13" stroke="var(--accent)" strokeWidth="0.8" opacity="0.5" />
               </svg>
             </div>
             <span className="text-foreground font-semibold">

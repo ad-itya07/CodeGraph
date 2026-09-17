@@ -8,7 +8,7 @@ function GraphVisual() {
       {/* Glow behind the graph */}
       <div
         className="absolute inset-0 rounded-2xl blur-3xl opacity-20"
-        style={{ background: "radial-gradient(ellipse at center, #06b6d4 0%, transparent 70%)" }}
+        style={{ background: "radial-gradient(ellipse at center, var(--accent) 0%, transparent 70%)" }}
       />
 
       {/* Graph card */}
@@ -32,7 +32,7 @@ function GraphVisual() {
         >
           <defs>
             <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M0,0 L6,3 L0,6 Z" fill="#06b6d4" opacity="0.4" />
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--accent)" opacity="0.4" />
             </marker>
             <filter id="glow">
               <feGaussianBlur stdDeviation="2" result="blur" />
@@ -54,7 +54,7 @@ function GraphVisual() {
             <line
               key={i}
               x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke="#06b6d4" strokeWidth="1"
+              stroke="var(--accent)" strokeWidth="1"
               opacity="0.18"
               markerEnd="url(#arrow)"
             />
@@ -62,10 +62,10 @@ function GraphVisual() {
 
           {/* Satellite nodes — symbols */}
           {([
-            [180, 60,  "UserService",  "#06b6d4", 5, "symbol"],
-            [520, 60,  "AuthMiddleware","#06b6d4", 5, "symbol"],
-            [150, 200, "validateToken", "#22d3ee", 4, "symbol"],
-            [550, 200, "hashPassword",  "#22d3ee", 4, "symbol"],
+            [180, 60,  "UserService",  "var(--accent)", 5, "symbol"],
+            [520, 60,  "AuthMiddleware","var(--accent)", 5, "symbol"],
+            [150, 200, "validateToken", "var(--accent-light)", 4, "symbol"],
+            [550, 200, "hashPassword",  "var(--accent-light)", 4, "symbol"],
           ] as const).map(([cx, cy, label, fill, r, kind]) => (
             <g key={label}>
               <circle cx={cx} cy={cy} r={Number(r) + 8} fill={fill as string} opacity="0.06" />
@@ -97,9 +97,9 @@ function GraphVisual() {
           ))}
 
           {/* Central node — file */}
-          <circle cx="350" cy="130" r="24" fill="#06b6d4" opacity="0.08" />
-          <circle cx="350" cy="130" r="16" fill="#06b6d4" opacity="0.12" />
-          <circle cx="350" cy="130" r="8"  fill="#06b6d4" filter="url(#glow)" />
+          <circle cx="350" cy="130" r="24" fill="var(--accent)" opacity="0.08" />
+          <circle cx="350" cy="130" r="16" fill="var(--accent)" opacity="0.12" />
+          <circle cx="350" cy="130" r="8"  fill="var(--accent)" filter="url(#glow)" />
           <text x="350" y="158" textAnchor="middle" fontSize="10" fill="#e2eeff" fontFamily="monospace" fontWeight="500">
             auth.service.ts
           </text>
@@ -142,7 +142,7 @@ export default function HeroSection() {
           className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage:
-              "radial-gradient(circle, #06b6d4 1px, transparent 1px)",
+              "radial-gradient(circle, var(--accent) 1px, transparent 1px)",
             backgroundSize: "32px 32px",
           }}
         />
@@ -162,7 +162,7 @@ export default function HeroSection() {
           <br className="hidden sm:block" />
           your IDE{" "}
           <span className="text-transparent bg-clip-text"
-            style={{ backgroundImage: "linear-gradient(135deg, #06b6d4, #22d3ee)" }}>
+            style={{ backgroundImage: "linear-gradient(135deg, var(--accent), var(--accent-light))" }}>
             doesn&apos;t show you.
           </span>
         </h1>

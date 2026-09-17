@@ -4,22 +4,22 @@
 /* ─── CodeGraph Design Tokens ─── */
 :root {
   /* Backgrounds */
-  --background:       #080c14;
-  --surface:          #0d1626;
-  --surface-elevated: #112035;
+  --background:       #000000;
+  --surface:          #0a0a0a;
+  --surface-elevated: #171717;
 
   /* Borders */
-  --border:           #1a2d45;
-  --border-highlight: #1e4a6e;
+  --border:           #27272a;
+  --border-highlight: #3f3f46;
 
-  /* Accent — Cyan */
-  --accent:           #06b6d4;
-  --accent-light:     #22d3ee;
+  /* Accent — Crisp White */
+  --accent:           #fafafa;
+  --accent-light:     #ffffff;
 
   /* Text */
-  --foreground:       #e2eeff;
-  --muted:            #5b7fa3;
-  --subtle:           #2d4a6b;
+  --foreground:       #f4f4f5;
+  --muted:            #a1a1aa;
+  --subtle:           #52525b;
 
   /* Semantic */
   --success:          #10b981;
@@ -101,6 +101,6 @@ body {
 
 /* ─── Selection ─── */
 ::selection {
-  background-color: rgba(6, 182, 212, 0.25);
+  background-color: rgba(255, 255, 255, 0.15);
   color: var(--foreground);
 }

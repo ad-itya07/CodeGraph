@@ -21,7 +21,7 @@ export default function CTASection() {
           <div
             className="absolute inset-0 opacity-[0.03] pointer-events-none"
             style={{
-              backgroundImage: "radial-gradient(circle, #06b6d4 1px, transparent 1px)",
+              backgroundImage: "radial-gradient(circle, var(--accent) 1px, transparent 1px)",
               backgroundSize: "24px 24px",
             }}
           />

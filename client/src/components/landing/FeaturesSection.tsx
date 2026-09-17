@@ -90,7 +90,7 @@ export default function FeaturesSection() {
           <h2 className="text-4xl lg:text-5xl font-bold font-heading text-foreground mb-4">
             Everything your codebase{" "}
             <span className="text-transparent bg-clip-text"
-              style={{ backgroundImage: "linear-gradient(135deg, #06b6d4, #22d3ee)" }}>
+              style={{ backgroundImage: "linear-gradient(135deg, var(--accent), var(--accent-light))" }}>
               wants to tell you
             </span>
           </h2>
