@@ -44,6 +44,12 @@ const navItems: NavItem[] = [
     href: "/dashboard/codelens",
     icon: Sparkles,
   },
+  {
+    label: "Documentation",
+    href: "/docs",
+    icon: Workflow,
+    tag: "Docs",
+  },
 ];
 
 export function AppSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
