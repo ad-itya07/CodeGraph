@@ -11,23 +11,33 @@ import type {
 } from "@/types";
 
 export const repositoriesApi = {
+  getOverview: async () => {
+    const { data } = await apiClient.get<ApiResponse<{
+      repositoryCount: number;
+      totalCodeEntities: number;
+      totalRelationships: number;
+      averageHealthIndex: number;
+    }>>("/repository/overview");
+    return data.data;
+  },
+
   list: async () => {
     const { data } = await apiClient.get<ApiResponse<Repository[]>>(
-      "/repositories"
+      "/repository"
     );
     return data.data;
   },
 
   get: async (id: string) => {
     const { data } = await apiClient.get<ApiResponse<Repository>>(
-      `/repositories/${id}`
+      `/repository/${id}`
     );
     return data.data;
   },
 
   create: async (url: string) => {
     const { data } = await apiClient.post<ApiResponse<{ repository: Repository }>>(
-      "/repositories",
+      "/repository",
       { url }
     );
     return data.data;
@@ -35,7 +45,7 @@ export const repositoriesApi = {
 
   getGraph: async (id: string) => {
     const { data } = await apiClient.get<ApiResponse<SerializedGraph>>(
-      `/repositories/${id}/graph`
+      `/repository/${id}/graph`
     );
     return data.data;
   },
@@ -44,7 +54,7 @@ export const repositoriesApi = {
 export const analyticsApi = {
   impact: async (id: string, nodeId: string, maxDepth?: number) => {
     const { data } = await apiClient.get<ApiResponse<ImpactAnalysisResult>>(
-      `/repositories/${id}/analysis/impact`,
+      `/repository/${id}/analysis/impact`,
       { params: { nodeId, ...(maxDepth !== undefined && { maxDepth }) } }
     );
     return data.data;
@@ -52,7 +62,7 @@ export const analyticsApi = {
 
   dependencies: async (id: string, nodeId: string, maxDepth?: number) => {
     const { data } = await apiClient.get<ApiResponse<DependencyAnalysisResult>>(
-      `/repositories/${id}/analysis/dependencies`,
+      `/repository/${id}/analysis/dependencies`,
       { params: { nodeId, ...(maxDepth !== undefined && { maxDepth }) } }
     );
     return data.data;
@@ -64,7 +74,7 @@ export const analyticsApi = {
     targetNodeId: string
   ) => {
     const { data } = await apiClient.get<ApiResponse<CallPathResult>>(
-      `/repositories/${id}/analysis/paths`,
+      `/repository/${id}/analysis/paths`,
       { params: { sourceNodeId, targetNodeId } }
     );
     return data.data;
@@ -72,14 +82,14 @@ export const analyticsApi = {
 
   cycles: async (id: string) => {
     const { data } = await apiClient.get<ApiResponse<CycleAnalysisResult>>(
-      `/repositories/${id}/analysis/cycles`
+      `/repository/${id}/analysis/cycles`
     );
     return data.data;
   },
 
   ordering: async (id: string, sourceNodeId: string) => {
     const { data } = await apiClient.get<ApiResponse<DependencyOrderingResult>>(
-      `/repositories/${id}/analysis/ordering`,
+      `/repository/${id}/analysis/ordering`,
       { params: { sourceNodeId } }
     );
     return data.data;
