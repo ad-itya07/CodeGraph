@@ -212,6 +212,21 @@ export interface DependencyOrderingResult {
   isOrderable: boolean;
 }
 
+export interface FanInOutResult {
+  nodeId: string;
+  fanIn: number;
+  fanOut: number;
+}
+
+export type AnalysisType =
+  | "home"
+  | "cycles"
+  | "impact"
+  | "dependencies"
+  | "ordering"
+  | "connectivity"
+  | "call-path";
+
 // Auth types
 export interface User {
   id: string;
@@ -231,4 +246,22 @@ export interface ApiResponse<T> {
   success: boolean;
   message: string;
   data: T;
+}
+
+// Recent Activity types
+export interface AnalysisActivity {
+  id: string;
+  userId: string;
+  repositoryId: string;
+  analysisType: "impact" | "dependencies" | "call-path" | "cycles" | "ordering" | "connectivity";
+  timestamp: string;
+  entityId?: string;
+  entityName?: string;
+  entityKind?: string;
+  entityPath?: string;
+  targetEntityId?: string;
+  targetEntityName?: string;
+  targetEntityKind?: string;
+  targetEntityPath?: string;
+  details?: Record<string, any>;
 }
