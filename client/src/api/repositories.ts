@@ -2,6 +2,7 @@ import { apiClient } from "./client";
 import type {
   ApiResponse,
   Repository,
+  RepositoryStatusResponse,
   SerializedGraph,
   ImpactAnalysisResult,
   DependencyAnalysisResult,
@@ -33,6 +34,20 @@ export const repositoriesApi = {
   get: async (id: string) => {
     const { data } = await apiClient.get<ApiResponse<Repository>>(
       `/repository/${id}`
+    );
+    return data.data;
+  },
+
+  getStatus: async (id: string) => {
+    const { data } = await apiClient.get<ApiResponse<RepositoryStatusResponse>>(
+      `/repository/${id}/status`
+    );
+    return data.data;
+  },
+
+  retry: async (id: string) => {
+    const { data } = await apiClient.post<ApiResponse<{ repository: Repository }>>(
+      `/repository/${id}/retry`
     );
     return data.data;
   },
