@@ -78,16 +78,40 @@ export interface SerializedGraph {
   edges: GraphEdge[];
 }
 
+// Repository status & stage types
+export type RepositoryStatus = "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+
+export type RepositoryStage =
+  | "CLONING"
+  | "PARSING_METADATA"
+  | "PARSING_PATH_CONFIG"
+  | "PARSING_SYMBOLS"
+  | "PARSING_RELATIONSHIPS"
+  | "BUILDING_GRAPH";
+
 // Repository types
 export interface Repository {
   id: string;
   url: string;
   name: string;
   commitSha: string | null;
+  status: RepositoryStatus;
+  currentStage?: RepositoryStage | null;
+  failedStage?: RepositoryStage | null;
+  errorCode?: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;
   overview?: RepositoryOverview;
+}
+
+export interface RepositoryStatusResponse {
+  id: string;
+  status: RepositoryStatus;
+  currentStage?: RepositoryStage | null;
+  failedStage?: RepositoryStage | null;
+  errorCode?: string | null;
+  updatedAt: string;
 }
 
 // Health types
