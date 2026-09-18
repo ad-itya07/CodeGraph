@@ -25,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { repositoriesApi } from "@/api/repositories";
 import { HealthIndexCard } from "@/components/overview/HealthIndexCard";
 import { OverviewMetricCard } from "@/components/overview/OverviewMetricCard";
+import { AnalysisCoverageCard } from "@/components/overview/AnalysisCoverageCard";
 import { getRepositoryRelativePath } from "@/lib/explorer/paths";
 
 function formatNumber(num?: number): string {
@@ -209,6 +210,9 @@ export default function RepositoryOverviewPage({
           />
         </div>
       </div>
+
+      {/* Analysis Coverage & Static Model Disclosure */}
+      <AnalysisCoverageCard />
 
       {/* Structural Insights & Hotspots Section */}
       {insights && (
