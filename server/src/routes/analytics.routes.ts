@@ -7,6 +7,7 @@ const router: Router = Router();
 
 router.use(authenticate);
 
+router.get("/:id/activity", analyticsController.getRecentActivity);
 router.get("/:id/analysis/impact", analyticsController.analyzeImpact);
 router.get("/:id/analysis/dependencies", analyticsController.analyzeDependencies);
 router.get("/:id/analysis/paths", analyticsController.analyzeCallPath);

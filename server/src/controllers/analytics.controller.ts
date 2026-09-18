@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import analyticsService from "@/services/analytics.service.js";
+import activityService from "@/services/activity.service.js";
 
 class AnalyticsController {
     async analyzeImpact(req: Request, res: Response, next: NextFunction) {
@@ -128,6 +129,29 @@ class AnalyticsController {
                 success: true,
                 message: "Connectivity analysis completed successfully",
                 data: result,
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    async getRecentActivity(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { id } = req.params;
+            const { analysisType, entityKind, limit } = req.query;
+
+            const activities = await activityService.getRecentActivities({
+                repositoryId: id as string,
+                userId: req.userId!,
+                analysisType: analysisType as string | undefined,
+                entityKind: entityKind as string | undefined,
+                limit: limit ? Number(limit) : undefined,
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Recent activity fetched successfully",
+                data: activities,
             });
         } catch (err) {
             next(err);
