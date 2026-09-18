@@ -12,5 +12,6 @@ router.get("/:id/analysis/dependencies", analyticsController.analyzeDependencies
 router.get("/:id/analysis/paths", analyticsController.analyzeCallPath);
 router.get("/:id/analysis/cycles", analyticsController.analyzeCycles);
 router.get("/:id/analysis/ordering", analyticsController.analyzeDependencyOrdering);
+router.get("/:id/analysis/connectivity", analyticsController.analyzeConnectivity);
 
 export default router;

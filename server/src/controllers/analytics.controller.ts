@@ -112,6 +112,27 @@ class AnalyticsController {
             next(err);
         }
     }
+
+    async analyzeConnectivity(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { id } = req.params;
+            const { nodeId } = req.query;
+
+            const result = await analyticsService.analyzeConnectivity({
+                repositoryId: id as string,
+                userId: req.userId!,
+                nodeId: nodeId as string,
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Connectivity analysis completed successfully",
+                data: result,
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
 }
 
 export default new AnalyticsController();

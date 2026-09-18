@@ -42,6 +42,12 @@ interface AnalyzeDependencyOrderingParams {
     sourceNodeId: string;
 }
 
+interface AnalyzeConnectivityParams {
+    repositoryId: string;
+    userId: string;
+    nodeId: string;
+}
+
 class AnalyticsService {
     async analyzeImpact({ repositoryId, userId, sourceNodeId, options }: AnalyzeImpactParams) {
         if (!repositoryId) {
@@ -237,6 +243,44 @@ class AnalyticsService {
         const analysisEngine = new AnalysisEngine(graph);
 
         const result = analysisEngine.analyzeDependencyOrdering(sourceNodeId);
+
+        await cacheService.set(
+            cacheKey,
+            JSON.stringify(result),
+            12 * 60 * 60
+        );
+
+        return result;
+    }
+
+    async analyzeConnectivity({ repositoryId, userId, nodeId }: AnalyzeConnectivityParams) {
+        if (!repositoryId) {
+            throw new ValidationError("Repository ID is required");
+        }
+
+        if (!nodeId) {
+            throw new ValidationError("Node ID is required");
+        }
+
+        const cacheKey = `analysis:connectivity:${repositoryId}:${nodeId}`;
+
+        const cachedResult = await cacheService.get(cacheKey);
+
+        if (cachedResult) {
+            return JSON.parse(cachedResult);
+        }
+
+        const repository = await findRepositoryById(repositoryId, userId);
+
+        if (!repository) {
+            throw new NotFoundError("Repository not found");
+        }
+
+        const graph = await getGraph(repositoryId);
+
+        const analysisEngine = new AnalysisEngine(graph);
+
+        const result = analysisEngine.analyzeFanInOut(nodeId);
 
         await cacheService.set(
             cacheKey,
