@@ -20,6 +20,8 @@ class RepositoryService {
     await createGraph(repository.id, result.graph);
     await upsertRepositoryOverview(repository.id, result.overview);
 
+    await cacheService.delete(`user:overview:${userId}`);
+
     return {
       repository,
     };
@@ -63,6 +65,20 @@ class RepositoryService {
   }
 
   async getUserOverview(userId: string) {
+    if (!userId) throw new ValidationError("User ID is required");
+
+    const cacheKey = `user:overview:${userId}`;
+
+    const cachedOverview = await cacheService.get(cacheKey);
+
+    if (cachedOverview) {
+      try {
+        return JSON.parse(cachedOverview);
+      } catch (err) {
+        console.error("Failed to parse cached user overview:", err);
+      }
+    }
+
     const overviews = await findRepositoryOverviewsByUserId(userId);
     const repositories = await findRepositoriesByUserId(userId);
 
@@ -88,12 +104,20 @@ class RepositoryService {
       ? Math.round(totalHealthScore / overviews.length) 
       : 0;
 
-    return {
+    const result = {
       repositoryCount,
       totalCodeEntities,
       totalRelationships,
       averageHealthIndex
     };
+
+    await cacheService.set(
+      cacheKey,
+      JSON.stringify(result),
+      7 * 24 * 60 * 60
+    );
+
+    return result;
   }
 }
 
