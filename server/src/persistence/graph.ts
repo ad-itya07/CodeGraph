@@ -13,6 +13,11 @@ export async function createGraph(repositoryId: string, graph: Graph) {
     try {
         const persistedGraph = serializeGraph(graph);
 
+        // Remove any existing graph for this repository to prevent duplicate key conflicts
+        await prisma.graph.deleteMany({
+            where: { repositoryId },
+        });
+
         return await prisma.graph.create({
             data: {
                 repositoryId,

@@ -11,13 +11,17 @@ import { PackageJsonExtractor } from "./extractors/PackageJsonExtractor.js";
 import { PathConfigExtractor } from "./extractors/PathConfigExtractor.js";
 import { RepositoryMetadata } from "./models/RepositoryMetadata.js";
 
-/*
-* TODO: later call this parse function inside the worker
-* const parser = new Parser();
-* await parser.parse(repositoryPath);
-*/
+export type ParserStage = 
+  | "PARSING_METADATA"
+  | "PARSING_PATH_CONFIG"
+  | "PARSING_SYMBOLS"
+  | "PARSING_RELATIONSHIPS";
+
 export class Parser {
-    async parse(repositoryPath: string): Promise<ParsedRepository> {
+    async parse(
+        repositoryPath: string,
+        onStageChange?: (stage: ParserStage) => Promise<void> | void
+    ): Promise<ParsedRepository> {
         repositoryPath = path.resolve(repositoryPath);
 
         // --- 1. Getting repository files ---
@@ -28,14 +32,20 @@ export class Parser {
             throw new NoSupportedFileError();
         }
 
-        // --- 2. Extracting metadata from package.json and tsconfig.json/jsconfig.json ---
+        // --- 2. Extracting metadata from package.json ---
+        if (onStageChange) {
+            await onStageChange("PARSING_METADATA");
+        }
         const packageJsonExtractor = new PackageJsonExtractor();
-        const pathConfigExtractor = new PathConfigExtractor();
-
         const packageJsons = repositoryFiles.packageJsonFiles.map(
             (filePath) => packageJsonExtractor.extract(filePath)
         );
 
+        // --- 3. Extracting path configurations from tsconfig.json / jsconfig.json ---
+        if (onStageChange) {
+            await onStageChange("PARSING_PATH_CONFIG");
+        }
+        const pathConfigExtractor = new PathConfigExtractor();
         const pathConfigs = [
             ...repositoryFiles.tsconfigJsonFiles,
             ...repositoryFiles.jsconfigJsonFiles
@@ -46,7 +56,10 @@ export class Parser {
             pathConfigs
         };
 
-        // --- 3. Parsing files and making ASTs ---
+        // --- 4. Parsing files, making ASTs, and extracting symbols ---
+        if (onStageChange) {
+            await onStageChange("PARSING_SYMBOLS");
+        }
         const parsedFiles: ParsedFile[] = [];
         const failedFiles: ParseFailure[] = [];
         for (const file of supportedFiles) {
@@ -61,19 +74,20 @@ export class Parser {
             }
         }
 
-        // --- 4. Extracting symbols for each parsed File ---
         const symbolExtractor = new SymbolExtractor();
-
         for (const parsedFile of parsedFiles) {
             symbolExtractor.extract(parsedFile);
         }
 
         // --- 5. Extracting relationships between symbols and files ---
+        if (onStageChange) {
+            await onStageChange("PARSING_RELATIONSHIPS");
+        }
         const relationshipExtractor = new RelationshipExtractor();
-
         const relationships = relationshipExtractor.extract(parsedFiles, metadata);
 
         // --- Returning the Parsed Repository ---
         return { repositoryPath, files: parsedFiles, metadata, failures: failedFiles, relationships };
     }
 }
+
