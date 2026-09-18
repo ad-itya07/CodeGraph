@@ -273,6 +273,30 @@ export class RelationshipExtractor {
         return this.findEnclosingClassSymbol(parsedFile, currentSymbol);
     }
 
+    // Helper function to find a member symbol, including following inheritance chains
+    private findMemberSymbol(parentSymbol: ParsedSymbol, memberName: string): ParsedSymbol | undefined {
+        const symbols = this.parsedFiles.flatMap(f => f.symbols);
+
+        let targetSymbol = symbols.find((symbol) => {
+            return symbol.name === memberName && symbol.parentSymbolId === parentSymbol.id;
+        });
+
+        if (targetSymbol) return targetSymbol;
+
+        // If not found and parent is a class/interface, check inheritance
+        if (parentSymbol.symbolKind === "class" || parentSymbol.symbolKind === "interface") {
+            const extendsRelationships = this.parsedRelationships.filter(r => r.sourceId === parentSymbol.id && r.relationshipKind === "extends");
+            for (const rel of extendsRelationships) {
+                const superClassSymbol = symbols.find(s => s.id === rel.targetId);
+                if (superClassSymbol) {
+                    const inheritedSymbol = this.findMemberSymbol(superClassSymbol, memberName);
+                    if (inheritedSymbol) return inheritedSymbol;
+                }
+            }
+        }
+        return undefined;
+    }
+
     // Helper function to resolve the parent symbol for the object in MemberExpression
     private resolveMemberExpressionObjectToParentSymbol(parsedFile: ParsedFile, path: NodePath<CallExpression>): ParsedSymbol | undefined {
         const callee = path.node.callee;
@@ -284,8 +308,50 @@ export class RelationshipExtractor {
             return this.resolveThisToParentSymbol(parsedFile);
         }
 
+        if (object.type === "Super") {
+            const enclosingClass = this.resolveThisToParentSymbol(parsedFile);
+            if (!enclosingClass) return undefined;
+            
+            const extendsRel = this.parsedRelationships.find(r => r.sourceId === enclosingClass.id && r.relationshipKind === "extends");
+            if (!extendsRel) return undefined;
+            
+            return this.parsedFiles.flatMap(f => f.symbols).find(s => s.id === extendsRel.targetId);
+        }
+
+        if (object.type === "NewExpression") {
+            const newExpressionCallee = object.callee;
+            if (newExpressionCallee.type === "Identifier") {
+                const binding = path.scope.getBinding(newExpressionCallee.name);
+                if (binding) {
+                    return this.resolveBindingToSymbol(parsedFile, binding);
+                }
+            }
+        }
+
         if (object.type === "Identifier") {
-            return this.resolveIdentifierObjectToParentSymbol(parsedFile, object.name, path);
+            const parentSymbol = this.resolveIdentifierObjectToParentSymbol(parsedFile, object.name, path);
+            if (parentSymbol) return parentSymbol;
+            
+            const binding = path.scope.getBinding(object.name);
+            if (binding) {
+                const node = binding.path.node;
+                // e.g. parameter with TSTypeAnnotation: function(userService: UserService)
+                if ((node.type === "Identifier" || node.type === "VariableDeclarator" || node.type === "ClassProperty" || node.type === "ClassPrivateProperty") && 'typeAnnotation' in node) {
+                    const typeAnn = (node as any).typeAnnotation;
+                    if (typeAnn && typeAnn.type === "TSTypeAnnotation" && typeAnn.typeAnnotation.type === "TSTypeReference") {
+                        const typeName = typeAnn.typeAnnotation.typeName;
+                        if (typeName.type === "Identifier") {
+                            const typeBinding = path.scope.getBinding(typeName.name);
+                            if (typeBinding) {
+                                return this.resolveBindingToSymbol(parsedFile, typeBinding);
+                            }
+                            // Fallback to searching the file for the type if not explicitly imported (e.g. global/ambient type but declared in same file without export? Unlikely but safe fallback)
+                            const typeSymbol = parsedFile.symbols.find(s => s.name === typeName.name && (s.symbolKind === 'class' || s.symbolKind === 'interface' || s.symbolKind === 'typeAlias'));
+                            if (typeSymbol) return typeSymbol;
+                        }
+                    }
+                }
+            }
         }
         return undefined;
     }
@@ -302,12 +368,7 @@ export class RelationshipExtractor {
         const parentSymbol = this.resolveMemberExpressionObjectToParentSymbol(parsedFile, path);
         if (!parentSymbol) return;
 
-        const targetSymbol = parsedFile.symbols.find((symbol) => {
-            return symbol.name === property.name &&
-                symbol.parentSymbolId === parentSymbol.id;
-        });
-
-        return targetSymbol;
+        return this.findMemberSymbol(parentSymbol, property.name);
     }
 
     /* ===========================
@@ -348,9 +409,17 @@ export class RelationshipExtractor {
     * IMPLEMENTS Realtionship
     ======================================================== */
 
-    // Helper function to reslolve the type-interface-symbol for the implemented class using name-search
-    private resolveImplementedSymbol(parsedFile: ParsedFile, expression: Node): ParsedSymbol | undefined {
+    // Helper function to resolve the type-interface-symbol for the implemented class using name-search
+    private resolveImplementedSymbol(parsedFile: ParsedFile, path: NodePath<ClassDeclaration | ClassExpression>, expression: Node): ParsedSymbol | undefined {
         if (expression.type !== "Identifier") return;
+
+        const binding = path.scope.getBinding(expression.name);
+        if (binding) {
+            const targetSymbol = this.resolveBindingToSymbol(parsedFile, binding);
+            if (targetSymbol && (targetSymbol.symbolKind === "interface" || targetSymbol.symbolKind === "typeAlias" || targetSymbol.symbolKind === "class")) {
+                return targetSymbol;
+            }
+        }
 
         return parsedFile.symbols.find(
             symbol =>
@@ -376,7 +445,7 @@ export class RelationshipExtractor {
             const expression = implementedInterface.expression;
             if (expression.type !== "Identifier") continue;
 
-            const interfaceSymbol = this.resolveImplementedSymbol(parsedFile, expression);
+            const interfaceSymbol = this.resolveImplementedSymbol(parsedFile, path, expression);
             if (!interfaceSymbol) continue;
 
             this.addRelationship({ sourceId: classSymbol.id, sourceKind: "symbol", targetId: interfaceSymbol.id, targetKind: "symbol", relationshipKind: "implements" });

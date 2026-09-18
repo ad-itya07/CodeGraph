@@ -345,9 +345,14 @@ export class SymbolExtractor {
     private resolveExportSpecifierToSymbol(parsedFile: ParsedFile, path: NodePath<ExportNamedDeclaration>, localName: string): ParsedSymbol | undefined {
         const binding = path.scope.getBinding(localName);
 
-        if (!binding) return;
+        if (binding) {
+            return this.resolveBindingToSymbol(parsedFile, binding);
+        }
 
-        return this.resolveBindingToSymbol(parsedFile, binding);
+        // Fallback for cases where babel didn't create a binding (like exported interfaces/types)
+        return parsedFile.symbols.find(
+            symbol => symbol.name === localName
+        );
     }
 
     // Extract Named Export Symbols
