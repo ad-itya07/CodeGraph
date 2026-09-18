@@ -46,7 +46,28 @@ export default function DashboardPage() {
   const { data: repositories, isLoading: isRepositoriesLoading, refetch: refetchRepositories } = useQuery({
     queryKey: ["repository", "list"],
     queryFn: repositoriesApi.list,
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.some(
+        (r) => r.status === "QUEUED" || r.status === "PROCESSING"
+      );
+      return hasActive ? 1500 : false;
+    },
   });
+
+  // Keep track of active repositories count to refetch overview when an analysis finishes
+  const prevActiveCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (repositories) {
+      const activeCount = repositories.filter(
+        (r) => r.status === "QUEUED" || r.status === "PROCESSING"
+      ).length;
+
+      if (prevActiveCountRef.current !== null && prevActiveCountRef.current > 0 && activeCount === 0) {
+        refetchOverview();
+      }
+      prevActiveCountRef.current = activeCount;
+    }
+  }, [repositories, refetchOverview]);
 
   const handleRepositoryAdded = () => {
     refetchOverview();
