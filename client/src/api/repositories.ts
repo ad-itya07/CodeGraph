@@ -8,6 +8,8 @@ import type {
   CallPathResult,
   CycleAnalysisResult,
   DependencyOrderingResult,
+  FanInOutResult,
+  AnalysisActivity,
 } from "@/types";
 
 export const repositoriesApi = {
@@ -46,6 +48,17 @@ export const repositoriesApi = {
   getGraph: async (id: string) => {
     const { data } = await apiClient.get<ApiResponse<SerializedGraph>>(
       `/repository/${id}/graph`
+    );
+    return data.data;
+  },
+
+  getActivity: async (
+    id: string,
+    filters?: { analysisType?: string; entityKind?: string; limit?: number }
+  ) => {
+    const { data } = await apiClient.get<ApiResponse<AnalysisActivity[]>>(
+      `/repository/${id}/activity`,
+      { params: filters }
     );
     return data.data;
   },
@@ -91,6 +104,14 @@ export const analyticsApi = {
     const { data } = await apiClient.get<ApiResponse<DependencyOrderingResult>>(
       `/repository/${id}/analysis/ordering`,
       { params: { sourceNodeId } }
+    );
+    return data.data;
+  },
+
+  connectivity: async (id: string, nodeId: string) => {
+    const { data } = await apiClient.get<ApiResponse<FanInOutResult>>(
+      `/repository/${id}/analysis/connectivity`,
+      { params: { nodeId } }
     );
     return data.data;
   },
