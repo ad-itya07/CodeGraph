@@ -126,6 +126,33 @@ export default function SystemOverviewPage() {
         </p>
       </section>
 
+      {/* Analysis Coverage & Evolving Syntax Model */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold tracking-tight text-foreground font-heading">
+          Analysis Coverage &amp; Evolving Syntax Model
+        </h2>
+        <p className="text-sm text-muted leading-relaxed">
+          CodeGraph analyzes repositories using a <strong>static syntax and relationship model</strong>.
+          The parser extracts syntactic declarations and explicit binding relationships directly from Abstract Syntax Trees,
+          and analytics algorithms operate deterministically on that extracted graph representation.
+        </p>
+        <p className="text-sm text-muted leading-relaxed">
+          JavaScript and TypeScript support an extraordinarily flexible range of language constructs, functional compositions,
+          and coding patterns. Coverage of these syntactic forms is continuously expanding and evolving:
+        </p>
+        <ul className="list-disc list-inside text-sm text-muted space-y-1.5 pl-2">
+          <li>
+            <strong className="text-foreground">Direct Bindings</strong>: Explicit function calls, class inheritance (<code>extends</code>), interface contracts (<code>implements</code>), constructor instantiations (<code>new</code>), and ES module imports are fully modeled.
+          </li>
+          <li>
+            <strong className="text-foreground">Higher-Order Wrappers &amp; Dynamic Constructs</strong>: Complex patterns such as higher-order middleware wrappers (e.g., <code>const createUser = asyncHandler(async (req, res) =&gt; &#123; ... &#125;)</code>) or dynamic property access are completely valid code, though not every indirect relationship may be fully represented by the static extraction model.
+          </li>
+          <li>
+            <strong className="text-foreground">Structural Insights</strong>: Analysis results provide high-fidelity structural facts and architectural insights across files and symbols, designed as practical engineering telemetry rather than an exhaustive runtime semantic simulation.
+          </li>
+        </ul>
+      </section>
+
       <DocsCallout type="important" title="Error Containment">
         Individual file syntax errors are caught and appended to <code>failures: ParseFailure[]</code>.
         The parser never crashes the entire repository run due to a single invalid file; valid files continue
