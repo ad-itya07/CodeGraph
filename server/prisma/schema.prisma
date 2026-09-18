@@ -25,24 +25,46 @@ model User {
 }
 
 model Repository {
-  id            String   @id @default(cuid())
+  id            String            @id @default(cuid())
 
   url           String  
   name          String
   commitSha     String?
 
-  userId        String
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        RepositoryStatus  @default(QUEUED)
+  currentStage  RepositoryStage?
+  failedStage   RepositoryStage?
+  errorCode     String?
 
-  jobs          ParsingJob[] @relation("RepositoryJobs")
-  graph         Graph? @relation("RepositoryGraph")
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobs          ParsingJob[]      @relation("RepositoryJobs")
+  graph         Graph?            @relation("RepositoryGraph")
 
   overview      RepositoryOverview?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@unique([userId, url])
+  @@index([userId, status])
+}
+
+enum RepositoryStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum RepositoryStage {
+  CLONING
+  PARSING_METADATA
+  PARSING_PATH_CONFIG
+  PARSING_SYMBOLS
+  PARSING_RELATIONSHIPS
+  BUILDING_GRAPH
 }
 
 model RepositoryOverview {
