@@ -14,6 +14,7 @@ export function createRedisClient(): Redis {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: false,
+    family: 0,
   });
 }
 

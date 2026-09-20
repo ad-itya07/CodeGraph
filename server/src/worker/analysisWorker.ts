@@ -26,9 +26,10 @@ export function createAnalysisWorker(): Worker<RepositoryAnalysisJobData> {
     {
       connection: workerRedisClient,
       concurrency: 2,
-      drainDelay: 30,             
+      drainDelay: 300,             
       stalledInterval: 300000,    
-      lockDuration: 300000,       
+      lockDuration: 300000,
+      metrics: { maxDataPoints: 0 },
     }
   );
 
